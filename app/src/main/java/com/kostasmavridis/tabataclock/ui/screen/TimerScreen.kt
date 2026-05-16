@@ -37,7 +37,7 @@ fun TimerScreen(
     val state    by viewModel.timerState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    // ── Phase colours ──────────────────────────────────────────────────────
+    // ── Phase colours ─────────────────────────────────────────────────────────
     val targetTop = when (state.phase) {
         TabataPhase.PREPARE -> PhaseColors.Prepare
         TabataPhase.WORK    -> PhaseColors.Work
@@ -53,14 +53,14 @@ fun TimerScreen(
     val topColor by animateColorAsState(targetTop, tween(500), label = "top")
     val botColor by animateColorAsState(targetBot, tween(500), label = "bot")
 
-    // ── Progress arc ───────────────────────────────────────────────────────
+    // ── Progress arc ──────────────────────────────────────────────────────────
     val arcProgress by animateFloatAsState(
         targetValue    = state.phaseProgress,
         animationSpec  = tween(900, easing = LinearEasing),
         label          = "arc"
     )
 
-    // ── Pulse glow when running ────────────────────────────────────────────
+    // ── Pulse glow when running ───────────────────────────────────────────────
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by pulseAnim.animateFloat(
         initialValue   = 0.15f,
@@ -113,7 +113,7 @@ fun TimerScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // ── Countdown circle ──────────────────────────────────────────
+            // ── Countdown circle ─────────────────────────────────────────────────
             Box(
                 modifier = Modifier
                     .size(260.dp)
@@ -185,9 +185,9 @@ fun TimerScreen(
 
             // Round pips
             RoundPips(
-                total   = settings.rounds,
-                current = state.currentRound,
-                active  = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
+                total        = settings.rounds,
+                currentRound = state.currentRound,
+                active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
             )
 
             Spacer(Modifier.height(10.dp))
@@ -221,10 +221,10 @@ fun TimerScreen(
                         .background(Color.White.copy(alpha = 0.12f))
                 ) {
                     Icon(
-                        imageVector     = Icons.Default.Refresh,
+                        imageVector        = Icons.Default.Refresh,
                         contentDescription = "Reset",
-                        tint            = Color.White,
-                        modifier        = Modifier.size(26.dp)
+                        tint               = Color.White,
+                        modifier           = Modifier.size(26.dp)
                     )
                 }
 
@@ -256,7 +256,11 @@ fun TimerScreen(
 
 /** Small coloured dot per round — filled for completed, outlined for upcoming. */
 @Composable
-private fun RoundPips(total: Int, current: Int, active: Boolean) {
+private fun RoundPips(
+    total:        Int,
+    currentRound: Int,   // renamed from `current` to avoid shadowing the loop variable
+    active:       Boolean
+) {
     val dotSize    = if (total <= 12) 10.dp else 7.dp
     val dotSpacing = if (total <= 12) 6.dp  else 4.dp
     Row(
@@ -264,17 +268,17 @@ private fun RoundPips(total: Int, current: Int, active: Boolean) {
         verticalAlignment     = Alignment.CenterVertically
     ) {
         for (i in 1..minOf(total, 20)) {
-            val done    = active && i < current
-            val current = active && i == current
+            val isDone    = active && i < currentRound
+            val isCurrent = active && i == currentRound
             Box(
                 modifier = Modifier
                     .size(dotSize)
                     .clip(CircleShape)
                     .background(
                         when {
-                            current -> Color.White
-                            done    -> Color.White.copy(alpha = 0.55f)
-                            else    -> Color.White.copy(alpha = 0.18f)
+                            isCurrent -> Color.White
+                            isDone    -> Color.White.copy(alpha = 0.55f)
+                            else      -> Color.White.copy(alpha = 0.18f)
                         }
                     )
             )

@@ -22,7 +22,10 @@ class SettingsRepository @Inject constructor(private val context: Context) : ISe
     }
 
     override val settingsFlow: Flow<TabataSettings> = context.dataStore.data.map { prefs ->
-        TabataSettings(
+        // Use TabataSettings.validated() so that corrupted DataStore entries
+        // are silently clamped to safe ranges rather than propagating
+        // out-of-bounds integers into the ViewModel timer loop.
+        TabataSettings.validated(
             prepareSecs = prefs[KEY_PREPARE] ?: 10,
             workSecs    = prefs[KEY_WORK]    ?: 20,
             restSecs    = prefs[KEY_REST]    ?: 10,

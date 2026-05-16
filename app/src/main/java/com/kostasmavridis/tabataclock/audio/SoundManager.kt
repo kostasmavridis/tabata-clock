@@ -9,15 +9,20 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import com.kostasmavridis.tabataclock.R
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 class SoundManager @Inject constructor(private val context: Context) : ISoundManager {
 
     private val soundPool: SoundPool = SoundPool.Builder()
-        .setMaxStreams(3)
+        .setMaxStreams(4)
         .setAudioAttributes(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                // USAGE_MEDIA: routes to the Media volume slider and is
+                // correctly directed to sport Bluetooth headphones.
+                // Previously USAGE_ASSISTANCE_SONIFICATION which routes to
+                // Accessibility/Ring volume — wrong for a fitness timer.
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
         )
@@ -27,7 +32,13 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
     private var workId: Int = 0
     private var restId: Int = 0
     private var doneId: Int = 0
-    private var loaded = false
+
+    // Count how many of the 4 sounds have finished loading.
+    // Only set loaded=true when ALL four are ready to avoid playing
+    // a sound whose SoundPool ID is still 0.
+    private val loadedCount = AtomicInteger(0)
+    private val totalSounds = 4
+    @Volatile private var loaded = false
 
     private val vibrator: Vibrator by lazy {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -41,7 +52,9 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
 
     init {
         soundPool.setOnLoadCompleteListener { _, _, status ->
-            if (status == 0) loaded = true
+            if (status == 0 && loadedCount.incrementAndGet() == totalSounds) {
+                loaded = true
+            }
         }
         try {
             beepId = soundPool.load(context, R.raw.beep,       1)
