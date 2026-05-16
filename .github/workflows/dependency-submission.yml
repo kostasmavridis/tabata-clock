@@ -13,6 +13,16 @@
 # ───────────────────────────────────────────────────
 # Same root cause. Disable under: Settings → Security → Code security →
 # Dependency graph → Automatic dependency submission for Gradle → OFF
+#
+# WHY -Dorg.gradle.resolution.sources=false?
+# ───────────────────────────────────────────────────
+# The ForceDependencyResolutionPlugin resolves *all* configurations,
+# including *DependencySources ones. Many artifacts (local :app module,
+# androidx.compose.ui:ui-tooling, etc.) don't publish -sources.jar,
+# causing noisy FAILED entries in the build summary. These failures are
+# cosmetic — the dependency graph is still submitted correctly — but
+# suppressing source resolution keeps the summary clean and avoids
+# confusing "FAILED" annotations on a green run.
 
 name: Dependency Submission
 
@@ -81,6 +91,11 @@ jobs:
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
 
       # ── Resolve all dependencies ──────────────────────────────────────────
+      # -Dorg.gradle.resolution.sources=false skips *DependencySources
+      # configurations that the ForceDependencyResolutionPlugin adds.
+      # This eliminates FAILED entries for artifacts that don't publish
+      # -sources.jar (local :app module, ui-tooling, etc.) without
+      # affecting the accuracy of the submitted dependency graph.
       - name: Resolve dependencies and submit graph
         env:
           KEYSTORE_PATH: tabata-release.keystore
@@ -91,5 +106,6 @@ jobs:
           ./gradlew \
             -Dorg.gradle.configureondemand=false \
             -Dorg.gradle.dependency.verification=off \
+            -Dorg.gradle.resolution.sources=false \
             :ForceDependencyResolutionPlugin_resolveAllDependencies \
             --stacktrace
