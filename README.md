@@ -7,11 +7,24 @@ Built with Kotlin · Jetpack Compose · MVVM · Hilt · Coroutines
 
 ---
 
+### CI & Quality
 [![Android CI](https://github.com/kostasmavridis/tabata-clock/actions/workflows/build.yml/badge.svg)](https://github.com/kostasmavridis/tabata-clock/actions/workflows/build.yml)
+[![CodeQL](https://github.com/kostasmavridis/tabata-clock/actions/workflows/codeql.yml/badge.svg)](https://github.com/kostasmavridis/tabata-clock/actions/workflows/codeql.yml)
+[![Tests](https://img.shields.io/badge/Tests-26%20passing-4CAF50?logo=junit5&logoColor=white)](#testing-strategy)
+[![Coverage](https://img.shields.io/badge/Coverage-Kover%20report-blueviolet?logo=kotlin&logoColor=white)](https://github.com/kostasmavridis/tabata-clock/actions/workflows/build.yml)
+
+### Release & Distribution
+[![Release](https://github.com/kostasmavridis/tabata-clock/actions/workflows/release.yml/badge.svg)](https://github.com/kostasmavridis/tabata-clock/actions/workflows/release.yml)
+[![Latest Release](https://img.shields.io/github/v/release/kostasmavridis/tabata-clock?label=latest&color=0D47A1&logo=android)](https://github.com/kostasmavridis/tabata-clock/releases/latest)
+
+### Stack
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0.0-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-2024.08-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Jetpack Compose BOM](https://img.shields.io/badge/Compose%20BOM-2024.08.00-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Hilt](https://img.shields.io/badge/Hilt-2.51.1-FF6F00?logo=google&logoColor=white)](https://dagger.dev/hilt/)
 [![Min SDK](https://img.shields.io/badge/Min%20SDK-26%20(Android%208.0)-brightgreen?logo=android)](https://developer.android.com/about/versions/oreo)
 [![Target SDK](https://img.shields.io/badge/Target%20SDK-35%20(Android%2015)-brightgreen?logo=android)](https://developer.android.com/about/versions/15)
+
+### Community
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/kostasmavridis/tabata-clock/pulls)
 
@@ -114,7 +127,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 - **`AndroidViewModel` for service control** — `Application` context is needed to start/stop the `ForegroundService`. `AndroidViewModel` provides it safely without leaking an `Activity`.
 - **`phaseProgress` as a computed property** — derived from `secondsLeft / phaseDurationSecs` inside `TimerState` data class; no extra state field, no risk of drift.
 - **`updateAndGet`** — used in `runPhase()` to atomically update state and capture the new value in one call, avoiding a second `value` read.
-- **No `gradle-wrapper.jar` in version control** — the GitHub Contents API silently corrupts binary files. CI bootstraps the JAR by downloading the official Gradle distribution and running `gradle wrapper` on every build.
+- **No `gradle-wrapper.jar` in version control** — the GitHub Contents API silently corrupts binary files pushed through it. CI bootstraps the JAR by downloading the official Gradle distribution and running `gradle wrapper` on every build.
 
 ---
 
@@ -140,7 +153,7 @@ tabata-clock/
 │       │   │   │   └── AppModule.kt               # Hilt bindings
 │       │   │   ├── model/
 │       │   │   │   ├── TabataPhase.kt             # PREPARE / WORK / REST / DONE
-│       │   │   │   └── TabataSettings.kt          # Data class + totalWorkoutSecs()
+│       │   │   │   └── TabataSettings.kt          # Data class + validated() factory
 │       │   │   ├── service/
 │       │   │   │   ├── ServiceNotifier.kt         # Interface
 │       │   │   │   ├── IntentServiceNotifier.kt   # Production impl (Intent-based)
@@ -167,6 +180,8 @@ tabata-clock/
 │               ├── FakeSoundManager.kt            # ISoundManager fake
 │               ├── FakeSettingsRepository.kt      # ISettingsRepository fake
 │               └── TabataViewModelTest.kt         # 26 tests, 7 suites
+├── docs/
+│   └── adr/                       # Architecture Decision Records (ADR-001 – ADR-011)
 ├── scripts/
 │   ├── generate_sounds.py         # Generates 4 WAV files (stdlib only)
 │   └── README.md
@@ -319,7 +334,11 @@ The test suite has **26 tests across 7 `@Nested` suites** using JUnit 5:
 | `Full cycle` | DONE reached, `playWork()` × rounds, `playRest()` × (rounds−1), `playDone()` × 1, `playBeep()` in last 3 s, multi-set cycle |
 | `phaseProgress` | 0.0 at start, 1.0 at DONE, 1.0 when `phaseDurationSecs` is 0 (guard branch) |
 | `Settings` | `updateSettings()` persists, parametrized across 3 setting combinations |
-| `TabataSettings model` | Default values, `totalWorkoutSecs()` with 1 set and 2 sets, parametrized by round count |
+| `TabataSettings model` | Default values, `totalWorkoutSecs()` with 1 set and 2 sets, parametrized by round count, `validated()` clamps out-of-range values |
+
+### Coverage
+
+Kover generates both **XML** (consumed by CI) and **HTML** (human-readable) reports on every `build.yml` run. The XML artifact is available under **Actions → build → Artifacts**. Excluded from coverage: generated Hilt classes (`*_HiltModules*`, `*_Factory*`), DI modules, and Compose singleton lambdas.
 
 ### Test infrastructure
 
@@ -339,6 +358,21 @@ The test suite has **26 tests across 7 `@Nested` suites** using JUnit 5:
 | `TabataForegroundService` | Bound to Android `Service` lifecycle |
 | `TimerScreen`, `SettingsScreen` | Compose UI — requires instrumentation or Compose test rules |
 | Hilt `di/` classes | Generated code — excluded from Kover reports |
+
+---
+
+## Architecture Decision Records
+
+Significant architectural choices are documented as ADRs in [`docs/adr/`](docs/adr/). Key decisions covered:
+
+| ADR | Decision |
+|---|---|
+| [ADR-001](docs/adr/001-mvvm-architecture.md) | MVVM + StateFlow over MVP / MVI |
+| [ADR-002](docs/adr/002-jetpack-compose-ui.md) | Jetpack Compose over XML layouts |
+| [ADR-003](docs/adr/003-hilt-dependency-injection.md) | Hilt over Koin / manual DI |
+| [ADR-004](docs/adr/004-foreground-service-over-workmanager.md) | Foreground Service over WorkManager |
+| [ADR-005](docs/adr/005-datastore-over-sharedpreferences.md) | DataStore over SharedPreferences |
+| [ADR-008](docs/adr/008-gradle-wrapper-jar-bootstrap.md) | Gradle wrapper JAR bootstrap strategy + CI pitfalls |
 
 ---
 
