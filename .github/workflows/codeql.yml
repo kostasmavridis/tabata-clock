@@ -36,9 +36,6 @@ on:
     - cron: '0 0 * * 6'
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 # Cancel any in-progress scan for the same workflow + branch/PR.
 # Scheduled runs use a fixed group key so only one scheduled scan runs at a time.
 # workflow_dispatch always gets a unique run ID so manual triggers never cancel each other.

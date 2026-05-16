@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 # Cancel any in-progress run for the same workflow + branch/PR.
 # This prevents redundant builds when commits are pushed in quick succession.
 # A new push to the same branch/PR immediately supersedes the previous run.
