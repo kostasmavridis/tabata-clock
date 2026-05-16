@@ -29,9 +29,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # AGP 8.7.3 requires Gradle 8.9+.
-      # The wrapper JAR is not committed (binary cannot be pushed via GitHub API),
-      # so we bootstrap it by downloading Gradle 8.9 and running `gradle wrapper`.
       - name: Bootstrap Gradle wrapper JAR
         run: |
           GRADLE_VERSION=8.9
@@ -50,7 +47,7 @@ jobs:
 
       # ── Tests ─────────────────────────────────────────────────────────────
       - name: Run unit tests
-        run: ./gradlew test --stacktrace
+        run: ./gradlew test --stacktrace --rerun-tasks
 
       - name: Generate Kover coverage report
         run: ./gradlew koverXmlReport

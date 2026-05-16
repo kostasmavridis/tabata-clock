@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @HiltViewModel
@@ -31,11 +32,8 @@ class TabataViewModel @Inject constructor(
 ) : AndroidViewModel(application) {
 
     // ── Settings ──────────────────────────────────────────────────────────────
-    // Eagerly: value is synchronously available the moment the flow emits its
-    // first item (which FakeSettingsRepository does immediately). This guarantees
-    // settings.value is never stale when start()/reset() read it.
     val settings: StateFlow<TabataSettings> = repo.settingsFlow
-        .stateIn(viewModelScope, SharingStarted.Eagerly, TabataSettings())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TabataSettings())
 
     fun updateSettings(s: TabataSettings) {
         viewModelScope.launch { repo.saveSettings(s) }
@@ -58,10 +56,16 @@ class TabataViewModel @Inject constructor(
                     else 1f - (secondsLeft.toFloat() / phaseDurationSecs.toFloat())
     }
 
+    // Read the very first settings value synchronously so that secondsLeft is
+    // correct before any coroutine has had a chance to run. runBlocking is safe
+    // here because FakeSettingsRepository (tests) and DataStore (production)
+    // both emit their first value immediately on collection.
+    private val initialSettings: TabataSettings = runBlocking { repo.settingsFlow.first() }
+
     private val _timerState = MutableStateFlow(
         TimerState(
-            secondsLeft       = settings.value.prepareSecs,
-            phaseDurationSecs = settings.value.prepareSecs
+            secondsLeft       = initialSettings.prepareSecs,
+            phaseDurationSecs = initialSettings.prepareSecs
         )
     )
     val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
@@ -94,7 +98,10 @@ class TabataViewModel @Inject constructor(
     fun reset() {
         timerJob?.cancel()
         stopService()
+        // Use the live settings value; WhileSubscribed is active during reset
+        // because the UI is subscribed. Fall back to initialSettings if not yet live.
         val prepareSecs = settings.value.prepareSecs
+            .takeIf { it > 0 } ?: initialSettings.prepareSecs
         _timerState.value = TimerState(
             secondsLeft       = prepareSecs,
             phaseDurationSecs = prepareSecs
@@ -103,7 +110,7 @@ class TabataViewModel @Inject constructor(
 
     // ── Cycle Logic ───────────────────────────────────────────────────────────
     private suspend fun runTabataCycle() {
-        // Re-read settings fresh at the moment start() fires, not at VM creation.
+        // Always collect the freshest settings at the moment the cycle starts.
         val s = repo.settingsFlow.first()
         runPhase(TabataPhase.PREPARE, s.prepareSecs, s.prepareSecs)
         for (set in 1..s.sets) {
