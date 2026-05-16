@@ -1,14 +1,14 @@
 package com.kostasmavridis.tabataclock.viewmodel
 
 import android.app.Application
-import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.kostasmavridis.tabataclock.audio.ISoundManager
 import com.kostasmavridis.tabataclock.data.ISettingsRepository
 import com.kostasmavridis.tabataclock.model.TabataPhase
 import com.kostasmavridis.tabataclock.model.TabataSettings
-import com.kostasmavridis.tabataclock.service.TabataForegroundService
+import com.kostasmavridis.tabataclock.service.NoOpServiceNotifier
+import com.kostasmavridis.tabataclock.service.ServiceNotifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -28,7 +28,8 @@ import javax.inject.Inject
 class TabataViewModel @Inject constructor(
     application: Application,
     private val repo: ISettingsRepository,
-    private val soundManager: ISoundManager
+    private val soundManager: ISoundManager,
+    private val serviceNotifier: ServiceNotifier = NoOpServiceNotifier()
 ) : AndroidViewModel(application) {
 
     // ── Settings ──────────────────────────────────────────────────────────────
@@ -57,9 +58,7 @@ class TabataViewModel @Inject constructor(
     }
 
     // Read the very first settings value synchronously so that secondsLeft is
-    // correct before any coroutine has had a chance to run. runBlocking is safe
-    // here because FakeSettingsRepository (tests) and DataStore (production)
-    // both emit their first value immediately on collection.
+    // correct before any coroutine has had a chance to run.
     private val initialSettings: TabataSettings = runBlocking { repo.settingsFlow.first() }
 
     private val _timerState = MutableStateFlow(
@@ -82,14 +81,14 @@ class TabataViewModel @Inject constructor(
     fun pause() {
         timerJob?.cancel()
         _timerState.update { it.copy(isRunning = false, isPaused = true) }
-        stopService()
+        serviceNotifier.stop()
     }
 
     fun resume() {
         if (!_timerState.value.isPaused) return
         val state = _timerState.value
         _timerState.update { it.copy(isRunning = true, isPaused = false) }
-        notifyService(state.phase, state.secondsLeft, state.currentRound)
+        serviceNotifier.notify(state.phase, state.secondsLeft, state.currentRound)
         timerJob = viewModelScope.launch {
             runPhase(state.phase, state.secondsLeft, state.phaseDurationSecs)
         }
@@ -97,9 +96,7 @@ class TabataViewModel @Inject constructor(
 
     fun reset() {
         timerJob?.cancel()
-        stopService()
-        // Use the live settings value; WhileSubscribed is active during reset
-        // because the UI is subscribed. Fall back to initialSettings if not yet live.
+        serviceNotifier.stop()
         val prepareSecs = settings.value.prepareSecs
             .takeIf { it > 0 } ?: initialSettings.prepareSecs
         _timerState.value = TimerState(
@@ -110,7 +107,6 @@ class TabataViewModel @Inject constructor(
 
     // ── Cycle Logic ───────────────────────────────────────────────────────────
     private suspend fun runTabataCycle() {
-        // Always collect the freshest settings at the moment the cycle starts.
         val s = repo.settingsFlow.first()
         runPhase(TabataPhase.PREPARE, s.prepareSecs, s.prepareSecs)
         for (set in 1..s.sets) {
@@ -126,7 +122,7 @@ class TabataViewModel @Inject constructor(
             }
         }
         soundManager.playDone()
-        stopService()
+        serviceNotifier.stop()
         _timerState.update {
             it.copy(
                 phase             = TabataPhase.DONE,
@@ -147,26 +143,10 @@ class TabataViewModel @Inject constructor(
                     totalElapsedSecs  = it.totalElapsedSecs + 1
                 )
             }
-            notifyService(phase, remaining, state.currentRound)
+            serviceNotifier.notify(phase, remaining, state.currentRound)
             if (remaining <= 3) soundManager.playBeep()
             delay(1_000L)
         }
-    }
-
-    // ── Service Integration ───────────────────────────────────────────────────
-    private fun notifyService(phase: TabataPhase, secondsLeft: Int, round: Int) {
-        val ctx = getApplication<Application>()
-        val intent = Intent(ctx, TabataForegroundService::class.java).apply {
-            putExtra(TabataForegroundService.EXTRA_PHASE,   phase.label)
-            putExtra(TabataForegroundService.EXTRA_SECONDS, secondsLeft)
-            putExtra(TabataForegroundService.EXTRA_ROUND,   round)
-        }
-        ctx.startForegroundService(intent)
-    }
-
-    private fun stopService() {
-        val ctx = getApplication<Application>()
-        ctx.stopService(Intent(ctx, TabataForegroundService::class.java))
     }
 
     override fun onCleared() {
