@@ -10,12 +10,12 @@ ksp = "2.0.0-1.0.24"
 datastore = "1.1.7"
 activity = "1.10.1"
 # test
-junit5 = "5.10.3"
+junit5 = "5.13.1"
 androidJunit5 = "1.10.0.0"
-turbine = "1.1.0"
-mockk = "1.13.12"
-coroutinesTest = "1.8.1"
-kover = "0.8.3"
+turbine = "1.2.1"
+mockk = "1.14.6"
+coroutinesTest = "1.10.0"
+kover = "0.9.8"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -39,7 +39,7 @@ hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-com
 junit5-api      = { group = "org.junit.jupiter",  name = "junit-jupiter-api",      version.ref = "junit5" }
 junit5-engine   = { group = "org.junit.jupiter",  name = "junit-jupiter-engine",    version.ref = "junit5" }
 junit5-params   = { group = "org.junit.jupiter",  name = "junit-jupiter-params",    version.ref = "junit5" }
-junit5-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version = "1.10.3" }
+junit5-launcher = { group = "org.junit.platform", name = "junit-platform-launcher", version = "1.13.1" }
 turbine         = { group = "app.cash.turbine",   name = "turbine",                 version.ref = "turbine" }
 mockk           = { group = "io.mockk",           name = "mockk",                   version.ref = "mockk" }
 coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
