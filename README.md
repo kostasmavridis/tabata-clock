@@ -35,7 +35,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 - 💾 **Persistent settings** — saved with DataStore, survive process death
 - 🔒 **Foreground Service** — timer keeps running when the screen is off, with a live notification showing current phase, time remaining and round
 - 🎵 **Synthesised sounds** — all four WAV files auto-generated from Python stdlib (no binary assets in git)
-- ✅ **Unit tested** — 20 tests with JUnit 5, Turbine, MockK and `kotlinx-coroutines-test`
+- ✅ **Unit tested** — 26 tests with JUnit 5, Turbine, MockK and `kotlinx-coroutines-test`
 - 📊 **Code coverage** — Kover XML report generated on every CI run
 - 🤖 **GitHub Actions CI** — tests + coverage + debug APK on every push to `main`
 
@@ -94,6 +94,13 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 └───────────────────────┘  └────────────────────────────────┘
              │
 ┌────────────▼──────────────────────────────────────────────┐
+│              ServiceNotifier (interface)                  │
+│  ├── IntentServiceNotifier  — starts/updates/stops        │
+│  │   TabataForegroundService via Intents (production)     │
+│  └── NoOpServiceNotifier    — silent no-op (tests)        │
+└───────────────────────────────────────────────────────────┘
+             │
+┌────────────▼──────────────────────────────────────────────┐
 │              TabataForegroundService                      │
 │  Persistent notification — phase / seconds / round        │
 │  Started by ViewModel on play, stopped on reset/done      │
@@ -102,10 +109,12 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 
 ### Key design decisions
 
-- **Interfaces over concretions** — `ISoundManager` and `ISettingsRepository` are injected into `TabataViewModel`, meaning the ViewModel has zero dependency on Android framework classes. Fakes implement the interfaces directly in tests.
+- **Interfaces over concretions** — `ISoundManager`, `ISettingsRepository`, and `ServiceNotifier` are all injected into `TabataViewModel`, meaning the ViewModel has zero dependency on Android framework classes. Fakes implement the interfaces directly in tests.
+- **`ServiceNotifier` abstraction** — production code uses `IntentServiceNotifier` to start/update/stop `TabataForegroundService` via Intents. Tests use `NoOpServiceNotifier` as a silent default, keeping the ViewModel fully unit-testable without a running Service.
 - **`AndroidViewModel` for service control** — `Application` context is needed to start/stop the `ForegroundService`. `AndroidViewModel` provides it safely without leaking an `Activity`.
 - **`phaseProgress` as a computed property** — derived from `secondsLeft / phaseDurationSecs` inside `TimerState` data class; no extra state field, no risk of drift.
 - **`updateAndGet`** — used in `runPhase()` to atomically update state and capture the new value in one call, avoiding a second `value` read.
+- **No `gradle-wrapper.jar` in version control** — the GitHub Contents API silently corrupts binary files. CI bootstraps the JAR by downloading the official Gradle distribution and running `gradle wrapper` on every build.
 
 ---
 
@@ -115,52 +124,57 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 tabata-clock/
 ├── .github/
 │   └── workflows/
-│       └── build.yml              # CI: sounds → tests → coverage → APK
+│       ├── build.yml              # CI: sounds → tests → coverage → APK
+│       └── release.yml            # Release: signed APK + GitHub Release
 ├── app/
 │   └── src/
 │       ├── main/
 │       │   ├── java/com/kostasmavridis/tabataclock/
 │       │   │   ├── audio/
-│       │   │   │   ├── ISoundManager.kt       # Interface
-│       │   │   │   └── SoundManager.kt        # SoundPool + haptics impl
+│       │   │   │   ├── ISoundManager.kt           # Interface
+│       │   │   │   └── SoundManager.kt            # SoundPool + haptics impl
 │       │   │   ├── data/
-│       │   │   │   ├── ISettingsRepository.kt # Interface
-│       │   │   │   └── SettingsRepository.kt  # DataStore impl
+│       │   │   │   ├── ISettingsRepository.kt     # Interface
+│       │   │   │   └── SettingsRepository.kt      # DataStore impl
 │       │   │   ├── di/
-│       │   │   │   └── AppModule.kt           # Hilt bindings
+│       │   │   │   └── AppModule.kt               # Hilt bindings
 │       │   │   ├── model/
-│       │   │   │   ├── TabataPhase.kt         # PREPARE / WORK / REST / DONE
-│       │   │   │   └── TabataSettings.kt      # Data class + totalWorkoutSecs()
+│       │   │   │   ├── TabataPhase.kt             # PREPARE / WORK / REST / DONE
+│       │   │   │   └── TabataSettings.kt          # Data class + totalWorkoutSecs()
 │       │   │   ├── service/
-│       │   │   │   └── TabataForegroundService.kt
+│       │   │   │   ├── ServiceNotifier.kt         # Interface
+│       │   │   │   ├── IntentServiceNotifier.kt   # Production impl (Intent-based)
+│       │   │   │   ├── NoOpServiceNotifier.kt     # Test/default no-op impl
+│       │   │   │   └── TabataForegroundService.kt # Notification + background timer
 │       │   │   ├── ui/
 │       │   │   │   ├── navigation/NavGraph.kt
 │       │   │   │   ├── screen/
-│       │   │   │   │   ├── TimerScreen.kt     # Progress arc + phase colours
-│       │   │   │   │   └── SettingsScreen.kt  # Sliders + steppers
-│       │   │   │   └── theme/Theme.kt         # Dark Material 3 + PhaseColors
+│       │   │   │   │   ├── TimerScreen.kt         # Progress arc + phase colours
+│       │   │   │   │   └── SettingsScreen.kt      # Sliders + steppers
+│       │   │   │   └── theme/Theme.kt             # Dark Material 3 + PhaseColors
 │       │   │   ├── viewmodel/
-│       │   │   │   └── TabataViewModel.kt     # Core timer logic
+│       │   │   │   └── TabataViewModel.kt         # Core timer logic
 │       │   │   ├── MainActivity.kt
-│       │   │   └── TabataApp.kt              # @HiltAndroidApp
+│       │   │   └── TabataApp.kt                   # @HiltAndroidApp
 │       │   └── res/
 │       │       ├── drawable/ic_timer_notification.xml
-│       │       ├── raw/                       # WAVs generated at build time
+│       │       ├── raw/                           # WAVs generated at build time
 │       │       └── values/
 │       │           ├── strings.xml
 │       │           └── themes.xml
 │       └── test/
 │           └── java/com/kostasmavridis/tabataclock/
-│               ├── FakeSoundManager.kt        # ISoundManager fake
-│               ├── FakeSettingsRepository.kt  # ISettingsRepository fake
-│               └── TabataViewModelTest.kt     # 20 tests, 6 suites
+│               ├── FakeSoundManager.kt            # ISoundManager fake
+│               ├── FakeSettingsRepository.kt      # ISettingsRepository fake
+│               └── TabataViewModelTest.kt         # 26 tests, 7 suites
 ├── scripts/
 │   ├── generate_sounds.py         # Generates 4 WAV files (stdlib only)
 │   └── README.md
 ├── gradle/wrapper/
-│   └── gradle-wrapper.properties  # Gradle 8.7 — JAR bootstrapped by CI
+│   └── gradle-wrapper.properties  # Gradle 8.9 — JAR bootstrapped by CI
 ├── build.gradle.kts
 ├── settings.gradle.kts
+├── CONTRIBUTING.md
 ├── gradlew / gradlew.bat
 └── .gitignore
 ```
@@ -177,7 +191,7 @@ tabata-clock/
 | JDK | 17 |
 | Android SDK | 35 |
 | Python | 3.8+ (for sound generation) |
-| Gradle | 8.7 (wrapper auto-downloads) |
+| Gradle | 8.9 (wrapper auto-downloads) |
 
 ### Clone & Run
 
@@ -190,14 +204,14 @@ python scripts/generate_sounds.py
 
 # 2. Bootstrap the Gradle wrapper JAR (first time only)
 #    Android Studio does this automatically on project sync
-gradle wrapper --gradle-version 8.7 --distribution-type bin
+gradle wrapper --gradle-version 8.9 --distribution-type bin
 
 # 3. Build & install debug APK
 ./gradlew assembleDebug
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Or simply **open in Android Studio** → it will sync Gradle, generate nothing, so run the sound script first, then hit ▶ Run.
+Or simply **open in Android Studio** → sync Gradle, run `python scripts/generate_sounds.py` first, then hit ▶ Run.
 
 ### Run Tests
 
@@ -207,36 +221,58 @@ Or simply **open in Android Studio** → it will sync Gradle, generate nothing, 
 
 # With HTML coverage report
 ./gradlew koverHtmlReport
-open app/build/reports/kover/html/index.html
+open app/build/reports/kover/html/index.html   # macOS
+start app\build\reports\kover\html\index.html  # Windows
 ```
 
 ---
 
 ## CI / CD Pipeline
 
-Every push to `main` and every pull request triggers the GitHub Actions workflow:
+### `build.yml` — runs on every push to `main` and every PR
 
 ```
 checkout
     │
     ▼
-generate_sounds.py          # writes 4 WAV files into res/raw/
+generate_sounds.py             # writes 4 WAV files into res/raw/
     │
     ▼
-Bootstrap gradle-wrapper.jar  # downloads Gradle 8.7, runs `gradle wrapper`
-    │                         # (binary JAR cannot be committed via GitHub API)
-    ▼
-./gradlew test              # JUnit 5 — 20 tests across 6 suites
+Bootstrap gradle-wrapper.jar   # downloads Gradle 8.9, runs `gradle wrapper`
     │
     ▼
-./gradlew koverXmlReport    # uploads coverage XML as artifact
+./gradlew test                 # JUnit 5 — 26 tests across 7 suites
     │
     ▼
-./gradlew assembleDebug     # uploads app-debug.apk as artifact
+./gradlew koverXmlReport       # uploads coverage XML as artifact
+    │
+    ▼
+./gradlew assembleDebug        # uploads app-debug.apk as artifact
 ```
 
+### `release.yml` — runs on `v*` tags (e.g. `v1.0.0`)
+
+```
+checkout → generate sounds → bootstrap wrapper
+    │
+    ▼
+./gradlew assembleRelease      # signed with keystore from GitHub Secrets
+    │
+    ▼
+GitHub Release created         # APK attached as release asset
+```
+
+### Required GitHub Secrets (for signed builds)
+
+| Secret | Description |
+|---|---|
+| `KEYSTORE_BASE64` | Base64-encoded `.jks` / `.keystore` file |
+| `KEYSTORE_PASSWORD` | Store password (`-storepass`) |
+| `KEY_ALIAS` | Key alias used when generating the keystore |
+| `KEY_PASSWORD` | Key password (`-keypass`) |
+
 > **Why is `gradle-wrapper.jar` not committed?**  
-> The GitHub Contents API can only write plain text. Binary `.jar` files pushed through it are silently corrupted. The bootstrap step downloads the official Gradle distribution and runs `gradle wrapper` to regenerate the JAR fresh on every CI run.
+> The GitHub Contents API silently corrupts binary files pushed through it. The bootstrap step downloads the official Gradle distribution and regenerates the JAR fresh on every CI run.
 
 ---
 
@@ -272,34 +308,49 @@ All phase transitions are animated with a 400 ms `animateColorAsState` tween. Th
 
 ### Unit Tests (`app/src/test/`)
 
-The test suite has **20 tests across 6 `@Nested` suites** using JUnit 5:
+The test suite has **26 tests across 7 `@Nested` suites** using JUnit 5:
 
 | Suite | What is verified |
 |---|---|
 | `Initial state` | Phase = PREPARE, not running, secondsLeft = prepareSecs, round = 1 |
 | `start()` | Sets `isRunning`, double-start idempotent, countdown ticks, PREPARE → WORK transition |
-| `pause() / resume()` | Freezes timer, seconds don't change while paused, resume restores state, no-op guard |
+| `pause() / resume()` | Freezes timer, seconds don't change while paused, resume restores state, countdown continues from paused position, no-op guard |
 | `reset()` | Returns to PREPARE, correct `secondsLeft`, clears `isPaused` |
-| `Full cycle` | DONE reached, `playWork()` × rounds, `playRest()` × (rounds−1), `playDone()` × 1 |
-| `phaseProgress` | 0.0 at start, 1.0 at DONE |
-| `TabataSettings model` | `totalWorkoutSecs()` correctness, parametrized across 3 round counts |
+| `Full cycle` | DONE reached, `playWork()` × rounds, `playRest()` × (rounds−1), `playDone()` × 1, `playBeep()` in last 3 s, multi-set cycle |
+| `phaseProgress` | 0.0 at start, 1.0 at DONE, 1.0 when `phaseDurationSecs` is 0 (guard branch) |
+| `Settings` | `updateSettings()` persists, parametrized across 3 setting combinations |
+| `TabataSettings model` | Default values, `totalWorkoutSecs()` with 1 set and 2 sets, parametrized by round count |
 
 ### Test infrastructure
 
-- **`FakeSoundManager`** implements `ISoundManager` — silent, counts calls per method
-- **`FakeSettingsRepository`** implements `ISettingsRepository` — `MutableStateFlow`-backed, no DataStore
+- **`FakeSoundManager`** implements `ISoundManager` — silent, counts calls per method (`beepCount`, `workCount`, `restCount`, `doneCount`)
+- **`FakeSettingsRepository`** implements `ISettingsRepository` — `MutableStateFlow`-backed, exposes `.flow` for direct mutation in tests, no DataStore
+- **`NoOpServiceNotifier`** is the default in `TabataViewModel` — no `Intent`s fired during tests
 - **`StandardTestDispatcher`** + `advanceTimeBy()` — `delay(1_000L)` in the ViewModel becomes instant; a full 13-second cycle completes in < 1 ms
 - **Turbine** — `flow.test { awaitItem() }` for asserting on emitted `StateFlow` values
+
+### What is intentionally NOT unit tested
+
+| Class | Reason |
+|---|---|
+| `MainActivity`, `TabataApp` | Android framework lifecycle — requires instrumentation |
+| `SoundManager` | Wraps `SoundPool` and `VibrationEffect` — Android system services |
+| `SettingsRepository` | Wraps `DataStore` — requires Android context and filesystem |
+| `TabataForegroundService` | Bound to Android `Service` lifecycle |
+| `TimerScreen`, `SettingsScreen` | Compose UI — requires instrumentation or Compose test rules |
+| Hilt `di/` classes | Generated code — excluded from Kover reports |
 
 ---
 
 ## Contributing
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. Quick summary:
+
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Run `python scripts/generate_sounds.py` and `gradle wrapper --gradle-version 8.7` once after cloning
+3. Run `python scripts/generate_sounds.py` and `gradle wrapper --gradle-version 8.9` once after cloning
 4. Make your changes and add tests
-5. Run `./gradlew test` — all 20 tests must pass
+5. Run `./gradlew test` — all 26 tests must pass
 6. Open a pull request against `main`
 
 ---
