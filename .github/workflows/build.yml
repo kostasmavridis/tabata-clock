@@ -13,7 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python (sound generator)
+      # ── Python: generate sound WAV files ─────────────────────────────────
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -21,18 +22,35 @@ jobs:
       - name: Generate sound files
         run: python scripts/generate_sounds.py
 
+      # ── Java / Gradle ─────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
+      # Bootstrap the wrapper JAR that was not committed (binary files
+      # cannot be pushed via the GitHub Contents API as plain text).
+      # gradle/actions/setup-gradle requires the JAR to already exist,
+      # so we download Gradle manually first, run `gradle wrapper` to
+      # regenerate the JAR, then hand off to the setup action for caching.
+      - name: Bootstrap Gradle wrapper JAR
+        run: |
+          GRADLE_VERSION=8.7
+          curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
+               -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          /tmp/gradle-dist/gradle-${GRADLE_VERSION}/bin/gradle wrapper \
+            --gradle-version ${GRADLE_VERSION} \
+            --distribution-type bin
+
+      - name: Setup Gradle (caching)
         uses: gradle/actions/setup-gradle@v3
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # ── Tests ─────────────────────────────────────────────────────────────
       - name: Run unit tests
         run: ./gradlew test --stacktrace
 
@@ -45,6 +63,7 @@ jobs:
           name: kover-coverage-report
           path: app/build/reports/kover/report.xml
 
+      # ── Build ─────────────────────────────────────────────────────────────
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
