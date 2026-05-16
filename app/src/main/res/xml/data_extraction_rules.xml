@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Data extraction rules (Android 12+).
+    Covers both cloud backup and device-to-device transfer.
+
+    Mirrors the backup_rules.xml policy:
+    - DataStore files are excluded from both cloud backup and D2D transfer
+      to avoid DataStore restore-time file conflicts.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="datastore" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore" />
+    </device-transfer>
+</data-extraction-rules>

@@ -18,16 +18,23 @@ import com.kostasmavridis.tabataclock.R
  * persistent notification so Android won't kill the process.
  *
  * Start it when the user presses Play; stop it on Reset or when the cycle completes.
+ *
+ * Lifecycle notes
+ * ───────────────
+ * Returns START_NOT_STICKY: the ViewModel owns all timer state via a coroutine
+ * running inside viewModelScope. If Android kills the process, both the ViewModel
+ * coroutine and this service are destroyed together. There is nothing to re-display,
+ * so the service must NOT be auto-restarted with a null Intent (which is what
+ * START_STICKY would do, resulting in a stale "GET READY / 0s" notification).
  */
 class TabataForegroundService : Service() {
 
     companion object {
-        const val CHANNEL_ID       = "tabata_timer_channel"
-        const val NOTIFICATION_ID  = 1001
-        const val ACTION_UPDATE    = "com.kostasmavridis.tabataclock.ACTION_UPDATE"
-        const val EXTRA_PHASE      = "extra_phase"
-        const val EXTRA_SECONDS    = "extra_seconds"
-        const val EXTRA_ROUND      = "extra_round"
+        const val CHANNEL_ID      = "tabata_timer_channel"
+        const val NOTIFICATION_ID = 1001
+        const val EXTRA_PHASE     = "extra_phase"
+        const val EXTRA_SECONDS   = "extra_seconds"
+        const val EXTRA_ROUND     = "extra_round"
     }
 
     override fun onCreate() {
@@ -41,19 +48,27 @@ class TabataForegroundService : Service() {
         val round   = intent?.getIntExtra(EXTRA_ROUND,   1) ?: 1
 
         startForeground(NOTIFICATION_ID, buildNotification(phase, seconds, round))
-        return START_STICKY
+
+        // START_NOT_STICKY: the ViewModel coroutine owns timer state.
+        // If Android kills this process, the ViewModel is also gone — do not
+        // restart with a null Intent (which would show stale notification data).
+        return START_NOT_STICKY
     }
 
     private fun buildNotification(phase: String, secondsLeft: Int, round: Int): Notification {
         val openIntent = PendingIntent.getActivity(
             this, 0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, MainActivity::class.java).apply {
+                // FLAG_ACTIVITY_SINGLE_TOP: bring existing MainActivity to front
+                // rather than creating a new instance over the existing one.
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_timer_notification)
             .setContentTitle("Tabata — $phase")
-            .setContentText("$secondsLeft s  •  Round $round")
+            .setContentText("$secondsLeft s  •  Round $round")
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(openIntent)

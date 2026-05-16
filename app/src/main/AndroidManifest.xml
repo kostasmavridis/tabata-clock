@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+        FOREGROUND_SERVICE_HEALTH is the correct category for a fitness interval timer.
+        specialUse requires Play Store approval and is reserved for foreground service
+        types that do not fit any other category. A Tabata timer unambiguously fits
+        the 'health' category (Android 14+).
+    -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".TabataApp"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -26,14 +34,14 @@
             </intent-filter>
         </activity>
 
+        <!--
+            android:exported="false" — third-party apps cannot bind or send Intents.
+            foregroundServiceType="health" — correct category for a fitness timer (Android 14+).
+        -->
         <service
             android:name=".service.TabataForegroundService"
-            android:foregroundServiceType="specialUse"
-            android:exported="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Tabata interval timer — keeps the countdown running while the screen is off" />
-        </service>
+            android:foregroundServiceType="health"
+            android:exported="false" />
 
     </application>
 </manifest>

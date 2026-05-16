@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Cloud backup rules (Android 11 and below / Auto Backup).
+
+    The only private data this app stores is DataStore Preferences
+    (app_settings.preferences_pb — timer durations, round counts).
+    These settings are non-sensitive and small; backing them up means
+    the user's custom Tabata configuration survives a device restore.
+
+    We exclude the DataStore proto itself from backup because DataStore
+    restores can conflict with an already-running DataStore instance,
+    leading to corruption. The app regenerates defaults on first launch.
+-->
+<full-backup-content>
+    <!-- Exclude DataStore managed files to avoid restore-time corruption -->
+    <exclude domain="file" path="datastore" />
+</full-backup-content>
