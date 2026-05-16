@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -20,10 +22,34 @@ android {
         versionName = "1.0.0"
     }
 
+    // Read signing config from environment variables (set by CI) or local.properties (local dev)
+    val keystorePath     = System.getenv("KEYSTORE_PATH")
+    val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+    val keyAlias         = System.getenv("KEY_ALIAS")
+    val keyPassword      = System.getenv("KEY_PASSWORD")
+
+    signingConfigs {
+        if (keystorePath != null && keystorePassword != null && keyAlias != null && keyPassword != null) {
+            create("release") {
+                storeFile     = file(keystorePath)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            // Use the persistent keystore when available (CI), otherwise fall back to default debug signing
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning != null) signingConfig = releaseSigning
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning != null) signingConfig = releaseSigning
         }
     }
 
@@ -40,13 +66,10 @@ android {
 
     packaging {
         jniLibs {
-            // libdatastore_shared_counter.so cannot be stripped by the NDK toolchain;
-            // keep it as-is to suppress the "Unable to strip" warning.
             keepDebugSymbols += "**/libdatastore_shared_counter.so"
         }
     }
 
-    // Use JUnit Platform for unit tests
     testOptions {
         unitTests.all {
             it.useJUnitPlatform()
@@ -93,7 +116,7 @@ dependencies {
     testImplementation(libs.junit5.api)
     testImplementation(libs.junit5.params)
     testRuntimeOnly(libs.junit5.engine)
-    testRuntimeOnly(libs.junit5.launcher)  // explicit launcher — required by Gradle 8.9+
+    testRuntimeOnly(libs.junit5.launcher)
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
