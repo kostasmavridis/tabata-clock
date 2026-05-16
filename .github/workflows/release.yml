@@ -1,0 +1,159 @@
+name: Release
+
+# Triggers on any tag of the form v1.0.0, v1.2.3-beta, etc.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # needed to create a GitHub Release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history needed for changelog generation
+
+      # ── Derive version from tag ──────────────────────────────────────────
+      - name: Set version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}          # e.g. v1.2.3
+          VERSION=${TAG#v}                       # e.g. 1.2.3
+          # versionCode = MAJOR*10000 + MINOR*100 + PATCH
+          MAJOR=$(echo $VERSION | cut -d. -f1)
+          MINOR=$(echo $VERSION | cut -d. -f2)
+          PATCH=$(echo $VERSION | cut -d. -f3 | cut -d- -f1)
+          CODE=$(( MAJOR * 10000 + MINOR * 100 + PATCH ))
+          echo "tag=$TAG"         >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "code=$CODE"       >> $GITHUB_OUTPUT
+          echo "Version: $VERSION  Code: $CODE"
+
+      # ── Python: generate sound WAV files ────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate sound files
+        run: python scripts/generate_sounds.py
+
+      # ── Java / Gradle ────────────────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Bootstrap Gradle wrapper JAR
+        run: |
+          GRADLE_VERSION=8.7
+          curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
+               -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          /tmp/gradle-dist/gradle-${GRADLE_VERSION}/bin/gradle wrapper \
+            --gradle-version ${GRADLE_VERSION} \
+            --distribution-type bin
+
+      - name: Setup Gradle (caching)
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # ── Decode keystore from secret ──────────────────────────────────────
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode \
+            > ${{ github.workspace }}/keystore.jks
+
+      # ── Build signed release APK + AAB ──────────────────────────────────
+      - name: Build signed release APK & AAB
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          KEYSTORE_PATH: ${{ github.workspace }}/keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew \
+            -PversionName="$VERSION_NAME" \
+            -PversionCode="$VERSION_CODE" \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD" \
+            assembleRelease bundleRelease --stacktrace
+
+      # ── Rename artifacts to include version ──────────────────────────────
+      - name: Rename artifacts
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          mv app/build/outputs/apk/release/app-release.apk \
+             app/build/outputs/apk/release/tabata-clock-${VERSION}.apk
+          mv app/build/outputs/bundle/release/app-release.aab \
+             app/build/outputs/bundle/release/tabata-clock-${VERSION}.aab
+
+      # ── Generate changelog from commits since last tag ───────────────────
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | sed -n '2p')
+          if [ -z "$PREVIOUS_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREVIOUS_TAG}..HEAD"
+          fi
+
+          # Categorise commits by conventional commit prefix
+          FEATURES=$(git log $RANGE --pretty=format:"- %s" \
+            --grep="^feat" | head -20)
+          FIXES=$(git log $RANGE --pretty=format:"- %s" \
+            --grep="^fix" | head -20)
+          OTHER=$(git log $RANGE --pretty=format:"- %s" \
+            --invert-grep --grep="^feat" --grep="^fix" | head -20)
+
+          {
+            echo 'notes<<EOF'
+            echo "## What's Changed"
+            echo ""
+            if [ -n "$FEATURES" ]; then
+              echo "### ✨ New Features"
+              echo "$FEATURES"
+              echo ""
+            fi
+            if [ -n "$FIXES" ]; then
+              echo "### 🐛 Bug Fixes"
+              echo "$FIXES"
+              echo ""
+            fi
+            if [ -n "$OTHER" ]; then
+              echo "### 🔧 Other Changes"
+              echo "$OTHER"
+              echo ""
+            fi
+            echo "---"
+            echo "**Full changelog:** https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ steps.version.outputs.tag }}"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+      # ── Create GitHub Release ────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Tabata Clock ${{ steps.version.outputs.tag }}"
+          body: ${{ steps.changelog.outputs.notes }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
+          files: |
+            app/build/outputs/apk/release/tabata-clock-${{ steps.version.outputs.version }}.apk
+            app/build/outputs/bundle/release/tabata-clock-${{ steps.version.outputs.version }}.aab
