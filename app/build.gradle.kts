@@ -38,6 +38,14 @@ android {
         compose = true
     }
 
+    packaging {
+        jniLibs {
+            // libdatastore_shared_counter.so cannot be stripped by the NDK toolchain;
+            // keep it as-is to suppress the "Unable to strip" warning.
+            keepDebugSymbols += "**/libdatastore_shared_counter.so"
+        }
+    }
+
     // Use JUnit Platform for unit tests
     testOptions {
         unitTests.all {
