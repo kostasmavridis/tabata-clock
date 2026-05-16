@@ -22,3 +22,8 @@ captures/
 app/src/main/res/raw/*.wav
 app/src/main/res/raw/*.mp3
 app/src/main/res/raw/*.ogg
+
+# Keystore files — never commit signing credentials
+*.jks
+*.keystore
+*.base64
