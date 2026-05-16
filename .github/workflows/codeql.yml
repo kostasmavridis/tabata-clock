@@ -1,0 +1,145 @@
+# CodeQL static analysis
+# Docs: https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/codeql-code-scanning-for-compiled-languages
+#
+# Language: kotlin (compiled — requires an actual build to extract the code graph)
+#
+# Why a custom build command?
+# ───────────────────────
+# CodeQL's autobuild for Kotlin/Android frequently fails on projects that:
+#   • use a version catalog (libs.versions.toml)
+#   • require sound files in res/raw/ before Gradle configuration completes
+#   • have a missing gradle-wrapper.jar (binary, not committed to this repo)
+# We therefore provide an explicit build command that mirrors build.yml exactly.
+#
+# Schedule: weekly on Saturday at 03:00 Athens time (off-peak, avoids Monday CI noise).
+# On every push/PR to main: immediate scan so new code is never unscanned.
+
+name: CodeQL Analysis
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - '.github/dependabot.yml'
+      - 'scripts/**'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - '.github/dependabot.yml'
+      - 'scripts/**'
+  schedule:
+    # Saturday 03:00 EEST (00:00 UTC) — low-traffic window
+    - cron: '0 0 * * 6'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  analyze:
+    name: Analyze (Kotlin)
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write   # required to upload SARIF results
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'kotlin' ]
+        # Add 'java' here if you ever add Java source files.
+        # CodeQL supports: c-cpp, csharp, go, java-kotlin, javascript-typescript, python, ruby, swift
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # ── Python: generate sound WAV files ────────────────────────────────
+      # The Gradle configuration phase references res/raw/*.wav.
+      # Without these files, Gradle fails before CodeQL can extract any code.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate sound files
+        run: python scripts/generate_sounds.py
+
+      # ── Java ────────────────────────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ── Bootstrap Gradle wrapper JAR ─────────────────────────────────────
+      # gradle-wrapper.jar is not committed (GitHub Contents API corrupts
+      # binary files). Regenerate it from the official Gradle distribution.
+      - name: Bootstrap Gradle wrapper JAR
+        run: |
+          GRADLE_VERSION=8.9
+          curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
+               -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          /tmp/gradle-dist/gradle-${GRADLE_VERSION}/bin/gradle wrapper \
+            --gradle-version ${GRADLE_VERSION} \
+            --distribution-type bin
+          chmod +x gradlew
+
+      # ── Decode keystore ─────────────────────────────────────────────────
+      # build.gradle.kts reads signing env vars during the configuration phase.
+      # Without a valid keystore path, the signingConfigs block is skipped
+      # (guarded by null checks), so this step is safe to omit if secrets are
+      # absent — but providing it keeps the build identical to build.yml.
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
+
+      # ── Initialise CodeQL ───────────────────────────────────────────────
+      # Must come BEFORE the build so CodeQL can hook into the compiler.
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Use the security-extended query suite:
+          #   • security-and-quality  — default; broad quality + security rules
+          #   • security-extended     — adds higher-precision, lower-recall rules
+          #   • security-experimental — bleeding-edge; higher false-positive rate
+          queries: security-extended
+          # Exclude generated / build output directories from analysis.
+          # This prevents noise from Hilt-generated classes, KAPT stubs, etc.
+          config: |
+            paths-ignore:
+              - app/build
+              - "**/*_HiltModules*"
+              - "**/*_Factory*"
+              - "**/*_MembersInjector*"
+              - "**/*Hilt_*"
+              - "**/ComposableSingletons*"
+
+      # ── Build (CodeQL traces this for Kotlin extraction) ────────────────
+      # We compile the debug variant only — it is sufficient for CodeQL to
+      # extract the full call graph. assembleDebug is faster than assembleRelease
+      # and does not require ProGuard/R8 processing.
+      - name: Build (CodeQL extraction)
+        env:
+          KEYSTORE_PATH: tabata-release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleDebug --stacktrace
+
+      # ── Analyse ───────────────────────────────────────────────────────────
+      # Runs all selected queries against the extracted database and uploads
+      # results as a SARIF file to GitHub's Security → Code scanning tab.
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          # Upload results even if the build step fails (best-effort scan)
+          upload: always
