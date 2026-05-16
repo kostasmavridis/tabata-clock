@@ -13,7 +13,7 @@
 # The correct approach for projects with a non-committed wrapper JAR is:
 #   1. Bootstrap the JAR ourselves (same pattern as build.yml)
 #   2. Use gradle/actions/setup-gradle for caching
-#   3. Invoke ./gradlew with -PgenerateAndSubmitDependencyGraph=true
+#   3. Invoke ./gradlew with dependency-graph: generate-and-submit
 #      which triggers the dependency-submission plugin registered by setup-gradle
 #
 # See: https://github.com/gradle/actions/blob/main/docs/dependency-submission.md
@@ -86,15 +86,20 @@ jobs:
             --distribution-type bin
           chmod +x gradlew
 
-      # ── Setup Gradle (enables dependency graph generation) ─────────────────
-      # When dependency-submission is enabled here, setup-gradle registers a
-      # ForceDependencyResolutionPlugin internally. We then invoke ./gradlew
-      # ourselves so our bootstrapped wrapper JAR is used rather than the
-      # action's own internal invocation.
+      # ── Setup Gradle (enables dependency graph generation + build scan) ──────
+      # gradle/actions/setup-gradle@v4 ships Node 20 internally.
+      # Force it to run on Node 24 to suppress the deprecation warning.
+      # build-scan-publish mirrors the setting in build.yml so every run
+      # (CI and dependency submission) gets a linked Build Scan.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           dependency-graph: generate-and-submit
+          build-scan-publish: true
+          build-scan-terms-of-use-url: "https://gradle.com/terms-of-service"
+          build-scan-terms-of-use-agree: "yes"
 
       # ── Decode keystore ────────────────────────────────────────────
       - name: Decode keystore

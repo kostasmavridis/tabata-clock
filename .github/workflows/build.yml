@@ -7,8 +7,6 @@ on:
     branches: [ main ]
 
 # Cancel any in-progress run for the same workflow + branch/PR.
-# This prevents redundant builds when commits are pushed in quick succession.
-# A new push to the same branch/PR immediately supersedes the previous run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -46,8 +44,12 @@ jobs:
             --gradle-version ${GRADLE_VERSION} \
             --distribution-type bin
 
+      # gradle/actions/setup-gradle@v4 ships Node 20 internally.
+      # Force it to run on Node 24 to suppress the deprecation warning.
       - name: Setup Gradle (caching)
         uses: gradle/actions/setup-gradle@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           build-scan-publish: true
           build-scan-terms-of-use-url: "https://gradle.com/terms-of-service"
