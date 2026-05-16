@@ -1,6 +1,7 @@
 package com.kostasmavridis.tabataclock.ui.screen
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -16,7 +17,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,17 +40,32 @@ fun TimerScreen(
     val state    by viewModel.timerState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    val targetColor = when (state.phase) {
+    // ── Animated background colour ─────────────────────────────────────────
+    val targetBgColor = when (state.phase) {
         TabataPhase.PREPARE -> PhaseColors.Prepare
         TabataPhase.WORK    -> PhaseColors.Work
         TabataPhase.REST    -> PhaseColors.Rest
         TabataPhase.DONE    -> PhaseColors.Done
     }
     val bgColor by animateColorAsState(
-        targetValue = targetColor,
+        targetValue = targetBgColor,
         animationSpec = tween(durationMillis = 400),
         label = "bgColor"
     )
+
+    // ── Animated progress arc ──────────────────────────────────────────────
+    val arcProgress by animateFloatAsState(
+        targetValue = state.phaseProgress,
+        animationSpec = tween(durationMillis = 800),
+        label = "arcProgress"
+    )
+    // Arc colour is a lighter tint of the background
+    val arcColor by animateColorAsState(
+        targetValue = Color.White.copy(alpha = 0.85f),
+        animationSpec = tween(durationMillis = 400),
+        label = "arcColor"
+    )
+    val arcTrackColor = Color.White.copy(alpha = 0.15f)
 
     Box(
         modifier = Modifier
@@ -73,22 +94,57 @@ fun TimerScreen(
                 fontWeight = FontWeight.SemiBold
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Big countdown circle
+            // ── Countdown circle with progress arc overlay ─────────────────
             Box(
                 modifier = Modifier
-                    .size(220.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.25f)),
+                    .size(240.dp)
+                    .drawWithCache {
+                        val strokeWidth = 14.dp.toPx()
+                        val inset = strokeWidth / 2f
+                        val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
+                        val topLeft = Offset(inset, inset)
+                        onDrawBehind {
+                            // Track (full circle)
+                            drawArc(
+                                color = arcTrackColor,
+                                startAngle = -90f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = arcSize,
+                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                            )
+                            // Progress arc
+                            drawArc(
+                                color = arcColor,
+                                startAngle = -90f,
+                                sweepAngle = 360f * arcProgress,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = arcSize,
+                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                            )
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "%02d".format(state.secondsLeft),
-                    fontSize = 96.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.White
-                )
+                // Inner filled circle
+                Box(
+                    modifier = Modifier
+                        .size(210.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.25f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "%02d".format(state.secondsLeft),
+                        fontSize = 96.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White
+                    )
+                }
             }
 
             Spacer(Modifier.height(20.dp))
