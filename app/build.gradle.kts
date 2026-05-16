@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.android.junit5)
+    alias(libs.plugins.kover)
 }
 
 android {
@@ -35,6 +37,29 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Use JUnit Platform for unit tests
+    testOptions {
+        unitTests.all {
+            it.useJUnitPlatform()
+        }
+    }
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                classes(
+                    "*.di.*",
+                    "*_HiltModules*",
+                    "*_Factory*",
+                    "*.BuildConfig",
+                    "*.ComposableSingletons*"
+                )
+            }
+        }
+    }
 }
 
 dependencies {
@@ -55,4 +80,12 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     debugImplementation(libs.androidx.ui.tooling)
+
+    // Unit tests (JVM)
+    testImplementation(libs.junit5.api)
+    testImplementation(libs.junit5.params)
+    testRuntimeOnly(libs.junit5.engine)
+    testImplementation(libs.turbine)
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
 }
