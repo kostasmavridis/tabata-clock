@@ -97,8 +97,9 @@ class TabataViewModel @Inject constructor(
     fun reset() {
         timerJob?.cancel()
         serviceNotifier.stop()
-        val prepareSecs = settings.value.prepareSecs
-            .takeIf { it > 0 } ?: initialSettings.prepareSecs
+        // Always read from repo directly — the WhileSubscribed StateFlow may not
+        // have an active subscriber in tests (or immediately after creation).
+        val prepareSecs = runBlocking { repo.settingsFlow.first() }.prepareSecs
         _timerState.value = TimerState(
             secondsLeft       = prepareSecs,
             phaseDurationSecs = prepareSecs
