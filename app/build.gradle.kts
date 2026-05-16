@@ -93,6 +93,7 @@ dependencies {
     testImplementation(libs.junit5.api)
     testImplementation(libs.junit5.params)
     testRuntimeOnly(libs.junit5.engine)
+    testRuntimeOnly(libs.junit5.launcher)  // explicit launcher — required by Gradle 8.9+
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
