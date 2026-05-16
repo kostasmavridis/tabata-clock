@@ -1,8 +1,7 @@
 package com.kostasmavridis.tabataclock.ui.screen
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -12,16 +11,14 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,153 +37,198 @@ fun TimerScreen(
     val state    by viewModel.timerState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    // ── Animated background colour ─────────────────────────────────────────
-    val targetBgColor = when (state.phase) {
+    // ── Phase colours ──────────────────────────────────────────────────────
+    val targetTop = when (state.phase) {
         TabataPhase.PREPARE -> PhaseColors.Prepare
         TabataPhase.WORK    -> PhaseColors.Work
         TabataPhase.REST    -> PhaseColors.Rest
         TabataPhase.DONE    -> PhaseColors.Done
     }
-    val bgColor by animateColorAsState(
-        targetValue = targetBgColor,
-        animationSpec = tween(durationMillis = 400),
-        label = "bgColor"
+    val targetBot = when (state.phase) {
+        TabataPhase.PREPARE -> PhaseColors.PrepareDark
+        TabataPhase.WORK    -> PhaseColors.WorkDark
+        TabataPhase.REST    -> PhaseColors.RestDark
+        TabataPhase.DONE    -> PhaseColors.DoneDark
+    }
+    val topColor by animateColorAsState(targetTop, tween(500), label = "top")
+    val botColor by animateColorAsState(targetBot, tween(500), label = "bot")
+
+    // ── Progress arc ───────────────────────────────────────────────────────
+    val arcProgress by animateFloatAsState(
+        targetValue    = state.phaseProgress,
+        animationSpec  = tween(900, easing = LinearEasing),
+        label          = "arc"
     )
 
-    // ── Animated progress arc ──────────────────────────────────────────────
-    val arcProgress by animateFloatAsState(
-        targetValue = state.phaseProgress,
-        animationSpec = tween(durationMillis = 800),
-        label = "arcProgress"
+    // ── Pulse glow when running ────────────────────────────────────────────
+    val pulseAnim = rememberInfiniteTransition(label = "pulse")
+    val pulseAlpha by pulseAnim.animateFloat(
+        initialValue   = 0.15f,
+        targetValue    = 0.45f,
+        animationSpec  = infiniteRepeatable(
+            animation  = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
     )
-    // Arc colour is a lighter tint of the background
-    val arcColor by animateColorAsState(
-        targetValue = Color.White.copy(alpha = 0.85f),
-        animationSpec = tween(durationMillis = 400),
-        label = "arcColor"
-    )
-    val arcTrackColor = Color.White.copy(alpha = 0.15f)
+    val glowAlpha = if (state.isRunning) pulseAlpha else 0f
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(bgColor)
+            .background(
+                brush = Brush.verticalGradient(listOf(topColor, botColor))
+            )
     ) {
-        // Settings icon — top right
+        // Settings icon
         IconButton(
             onClick = onNavigateToSettings,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp)
         ) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = "Settings",
+                tint = Color.White.copy(alpha = 0.8f)
+            )
         }
 
         Column(
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Phase label
+
+            // Phase label with letter-spacing
             Text(
-                text = state.phase.label,
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White.copy(alpha = 0.9f),
-                fontWeight = FontWeight.SemiBold
+                text  = state.phase.label.uppercase(),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    letterSpacing = 6.sp,
+                    fontWeight    = FontWeight.Bold
+                ),
+                color = Color.White.copy(alpha = 0.85f)
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // ── Countdown circle with progress arc overlay ─────────────────
+            // ── Countdown circle ──────────────────────────────────────────
             Box(
                 modifier = Modifier
-                    .size(240.dp)
+                    .size(260.dp)
                     .drawWithCache {
-                        val strokeWidth = 14.dp.toPx()
-                        val inset = strokeWidth / 2f
-                        val arcSize = Size(size.width - strokeWidth, size.height - strokeWidth)
-                        val topLeft = Offset(inset, inset)
+                        val stroke     = 16.dp.toPx()
+                        val glowStroke = 32.dp.toPx()
+                        val inset      = stroke / 2f
+                        val arcSize    = Size(size.width - stroke, size.height - stroke)
+                        val topLeft    = Offset(inset, inset)
                         onDrawBehind {
-                            // Track (full circle)
+                            // Glow ring (pulse when running)
                             drawArc(
-                                color = arcTrackColor,
-                                startAngle = -90f,
-                                sweepAngle = 360f,
-                                useCenter = false,
-                                topLeft = topLeft,
-                                size = arcSize,
-                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                            )
-                            // Progress arc
-                            drawArc(
-                                color = arcColor,
+                                color      = Color.White.copy(alpha = glowAlpha),
                                 startAngle = -90f,
                                 sweepAngle = 360f * arcProgress,
-                                useCenter = false,
-                                topLeft = topLeft,
-                                size = arcSize,
-                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                                useCenter  = false,
+                                topLeft    = topLeft,
+                                size       = arcSize,
+                                style      = Stroke(width = glowStroke, cap = StrokeCap.Round)
+                            )
+                            // Track
+                            drawArc(
+                                color      = Color.White.copy(alpha = 0.12f),
+                                startAngle = -90f,
+                                sweepAngle = 360f,
+                                useCenter  = false,
+                                topLeft    = topLeft,
+                                size       = arcSize,
+                                style      = Stroke(width = stroke, cap = StrokeCap.Round)
+                            )
+                            // Progress
+                            drawArc(
+                                color      = Color.White.copy(alpha = 0.90f),
+                                startAngle = -90f,
+                                sweepAngle = 360f * arcProgress,
+                                useCenter  = false,
+                                topLeft    = topLeft,
+                                size       = arcSize,
+                                style      = Stroke(width = stroke, cap = StrokeCap.Round)
                             )
                         }
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // Inner filled circle
                 Box(
                     modifier = Modifier
-                        .size(210.dp)
+                        .size(220.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.25f)),
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.10f),
+                                    Color.Black.copy(alpha = 0.35f)
+                                )
+                            )
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "%02d".format(state.secondsLeft),
-                        fontSize = 96.sp,
+                        text       = "%02d".format(state.secondsLeft),
+                        fontSize   = 88.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
+                        color      = Color.White
                     )
                 }
             }
 
             Spacer(Modifier.height(20.dp))
 
-            // Round / Set info
+            // Round pips
+            RoundPips(
+                total   = settings.rounds,
+                current = state.currentRound,
+                active  = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
+            )
+
+            Spacer(Modifier.height(10.dp))
+
             Text(
-                text = "Round ${state.currentRound} / ${settings.rounds}",
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White
+                text  = "Round ${state.currentRound} / ${settings.rounds}",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White.copy(alpha = 0.75f)
             )
             if (settings.sets > 1) {
                 Text(
-                    text = "Set ${state.currentSet} / ${settings.sets}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.7f)
+                    text  = "Set ${state.currentSet} / ${settings.sets}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.5f)
                 )
             }
 
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(44.dp))
 
-            // Controls row
+            // Controls
             Row(
-                horizontalArrangement = Arrangement.spacedBy(32.dp),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(28.dp),
+                verticalAlignment     = Alignment.CenterVertically
             ) {
                 // Reset
                 IconButton(
-                    onClick = { viewModel.reset() },
+                    onClick  = { viewModel.reset() },
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.15f))
+                        .background(Color.White.copy(alpha = 0.12f))
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector     = Icons.Default.Refresh,
                         contentDescription = "Reset",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
+                        tint            = Color.White,
+                        modifier        = Modifier.size(26.dp)
                     )
                 }
 
-                // Play / Pause — large FAB
+                // Play / Pause FAB
                 FloatingActionButton(
                     onClick = {
                         when {
@@ -195,18 +237,47 @@ fun TimerScreen(
                             else            -> viewModel.start()
                         }
                     },
-                    modifier = Modifier.size(80.dp),
-                    shape = CircleShape,
-                    containerColor = Color.White
+                    modifier       = Modifier.size(80.dp),
+                    shape          = CircleShape,
+                    containerColor = Color.White,
+                    elevation      = FloatingActionButtonDefaults.elevation(8.dp, 12.dp)
                 ) {
                     Icon(
-                        imageVector = if (state.isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        imageVector        = if (state.isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (state.isRunning) "Pause" else "Play",
-                        tint = bgColor,
-                        modifier = Modifier.size(40.dp)
+                        tint               = topColor,
+                        modifier           = Modifier.size(42.dp)
                     )
                 }
             }
+        }
+    }
+}
+
+/** Small coloured dot per round — filled for completed, outlined for upcoming. */
+@Composable
+private fun RoundPips(total: Int, current: Int, active: Boolean) {
+    val dotSize    = if (total <= 12) 10.dp else 7.dp
+    val dotSpacing = if (total <= 12) 6.dp  else 4.dp
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(dotSpacing),
+        verticalAlignment     = Alignment.CenterVertically
+    ) {
+        for (i in 1..minOf(total, 20)) {
+            val done    = active && i < current
+            val current = active && i == current
+            Box(
+                modifier = Modifier
+                    .size(dotSize)
+                    .clip(CircleShape)
+                    .background(
+                        when {
+                            current -> Color.White
+                            done    -> Color.White.copy(alpha = 0.55f)
+                            else    -> Color.White.copy(alpha = 0.18f)
+                        }
+                    )
+            )
         }
     }
 }
