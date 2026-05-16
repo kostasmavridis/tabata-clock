@@ -36,7 +36,7 @@ jobs:
 
       - name: Bootstrap Gradle wrapper JAR
         run: |
-          GRADLE_VERSION=8.9
+          GRADLE_VERSION=8.14.1
           curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
                -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp/gradle-dist

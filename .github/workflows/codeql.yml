@@ -37,8 +37,6 @@ on:
   workflow_dispatch:
 
 # Cancel any in-progress scan for the same workflow + branch/PR.
-# Scheduled runs use a fixed group key so only one scheduled scan runs at a time.
-# workflow_dispatch always gets a unique run ID so manual triggers never cancel each other.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'schedule' && 'scheduled' || github.ref }}
   cancel-in-progress: true
@@ -51,22 +49,18 @@ jobs:
     permissions:
       actions: read
       contents: read
-      security-events: write   # required to upload SARIF results
+      security-events: write
 
     strategy:
       fail-fast: false
       matrix:
         language: [ 'kotlin' ]
-        # Add 'java' here if you ever add Java source files.
-        # CodeQL supports: c-cpp, csharp, go, java-kotlin, javascript-typescript, python, ruby, swift
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       # ── Python: generate sound WAV files ────────────────────────────
-      # The Gradle configuration phase references res/raw/*.wav.
-      # Without these files, Gradle fails before CodeQL can extract any code.
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -83,11 +77,9 @@ jobs:
           distribution: 'temurin'
 
       # ── Bootstrap Gradle wrapper JAR ───────────────────────────────────
-      # gradle-wrapper.jar is not committed (GitHub Contents API corrupts
-      # binary files). Regenerate it from the official Gradle distribution.
       - name: Bootstrap Gradle wrapper JAR
         run: |
-          GRADLE_VERSION=8.9
+          GRADLE_VERSION=8.14.1
           curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
                -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
@@ -97,26 +89,15 @@ jobs:
           chmod +x gradlew
 
       # ── Decode keystore ─────────────────────────────────────────
-      # build.gradle.kts reads signing env vars during the configuration phase.
-      # Without a valid keystore path, the signingConfigs block is skipped
-      # (guarded by null checks), so this step is safe to omit if secrets are
-      # absent — but providing it keeps the build identical to build.yml.
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
 
       # ── Initialise CodeQL ──────────────────────────────────────────
-      # Must come BEFORE the build so CodeQL can hook into the compiler.
       - name: Initialise CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          # Use the security-extended query suite:
-          #   • security-and-quality  — default; broad quality + security rules
-          #   • security-extended     — adds higher-precision, lower-recall rules
-          #   • security-experimental — bleeding-edge; higher false-positive rate
           queries: security-extended
-          # Exclude generated / build output directories from analysis.
-          # This prevents noise from Hilt-generated classes, KAPT stubs, etc.
           config: |
             paths-ignore:
               - app/build
@@ -127,9 +108,6 @@ jobs:
               - "**/ComposableSingletons*"
 
       # ── Build (CodeQL traces this for Kotlin extraction) ─────────────────
-      # We compile the debug variant only — it is sufficient for CodeQL to
-      # extract the full call graph. assembleDebug is faster than assembleRelease
-      # and does not require ProGuard/R8 processing.
       - name: Build (CodeQL extraction)
         env:
           KEYSTORE_PATH: tabata-release.keystore
@@ -139,11 +117,8 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
 
       # ── Analyse ──────────────────────────────────────────────────────
-      # Runs all selected queries against the extracted database and uploads
-      # results as a SARIF file to GitHub's Security → Code scanning tab.
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
-          # Upload results even if the build step fails (best-effort scan)
           upload: always

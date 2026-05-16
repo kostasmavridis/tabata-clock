@@ -1,32 +1,18 @@
 # Submits the Gradle dependency graph to GitHub so that Dependabot
 # can raise security alerts and version-update PRs.
 #
-# Runs on every push to main and can be triggered manually.
-#
 # WHY NOT gradle/actions/dependency-submission@v4?
 # ───────────────────────────────────────────────────
-# That action invokes ./gradlew internally via its own JVM process, which
-# runs BEFORE our bootstrap step has placed gradle-wrapper.jar on disk.
-# The result is always:
-#   "Error: Could not find or load main class org.gradle.wrapper.GradleWrapperMain"
-#
-# The correct approach for projects with a non-committed wrapper JAR is:
-#   1. Bootstrap the JAR ourselves (same pattern as build.yml)
-#   2. Use gradle/actions/setup-gradle for caching
-#   3. Invoke ./gradlew with dependency-graph: generate-and-submit
-#      which triggers the dependency-submission plugin registered by setup-gradle
-#
-# See: https://github.com/gradle/actions/blob/main/docs/dependency-submission.md
-#      section "Dependency Submission without using the dependency-submission action"
+# That action invokes ./gradlew internally before our bootstrap step
+# has placed gradle-wrapper.jar on disk, always failing with
+# "Could not find or load main class org.gradle.wrapper.GradleWrapperMain".
+# We bootstrap the JAR ourselves and use gradle/actions/setup-gradle
+# with dependency-graph: generate-and-submit instead.
 #
 # WHY NOT GitHub's built-in Automatic Dependency Submission (Gradle)?
 # ───────────────────────────────────────────────────
-# GitHub's managed "Automatic Dependency Submission" workflow uses the
-# gradle-build-tools-actions/dependency-submission action, which also invokes
-# ./gradlew internally with no way to inject a bootstrap step. It always fails
-# with the same GradleWrapperMain ClassNotFoundException on this repo.
-# Disable it under: Settings → Security → Code security →
-#   Dependency graph → Automatic dependency submission for Gradle → OFF
+# Same root cause. Disable under: Settings → Security → Code security →
+# Dependency graph → Automatic dependency submission for Gradle → OFF
 
 name: Dependency Submission
 
@@ -35,8 +21,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-# Cancel any in-progress submission for the same branch.
-# Only the latest push to main needs to submit the graph; older runs are stale.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -45,16 +29,13 @@ jobs:
   dependency-submission:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required to submit the dependency graph
+      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       # ── Python: generate sound WAV files ────────────────────────────
-      # The Gradle configuration phase resolves :app which references
-      # res/raw/*.wav. Without these files the configuration phase fails
-      # before dependency resolution can complete.
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -71,13 +52,9 @@ jobs:
           distribution: 'temurin'
 
       # ── Bootstrap Gradle wrapper JAR ────────────────────────────────────────
-      # gradle-wrapper.jar is not committed (GitHub Contents API corrupts
-      # binary files). Regenerate it from the official Gradle distribution
-      # BEFORE setup-gradle runs so the JAR is present for every subsequent
-      # ./gradlew invocation, including the one setup-gradle makes internally.
       - name: Bootstrap Gradle wrapper JAR
         run: |
-          GRADLE_VERSION=8.9
+          GRADLE_VERSION=8.14.1
           curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
                -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
@@ -89,8 +66,6 @@ jobs:
       # ── Setup Gradle (enables dependency graph generation + build scan) ──────
       # gradle/actions/setup-gradle@v4 ships Node 20 internally.
       # Force it to run on Node 24 to suppress the deprecation warning.
-      # build-scan-publish mirrors the setting in build.yml so every run
-      # (CI and dependency submission) gets a linked Build Scan.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         env:
@@ -106,10 +81,6 @@ jobs:
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
 
       # ── Resolve all dependencies ──────────────────────────────────────────
-      # setup-gradle's ForceDependencyResolutionPlugin adds the
-      # :ForceDependencyResolutionPlugin_resolveAllDependencies task.
-      # Running it through OUR gradlew (with the bootstrapped JAR) produces
-      # the dependency graph JSON that setup-gradle then submits to GitHub.
       - name: Resolve dependencies and submit graph
         env:
           KEYSTORE_PATH: tabata-release.keystore
