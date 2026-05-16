@@ -11,7 +11,7 @@ import android.util.Log
 import com.kostasmavridis.tabataclock.R
 import javax.inject.Inject
 
-class SoundManager @Inject constructor(private val context: Context) {
+class SoundManager @Inject constructor(private val context: Context) : ISoundManager {
 
     private val soundPool: SoundPool = SoundPool.Builder()
         .setMaxStreams(3)
@@ -43,9 +43,8 @@ class SoundManager @Inject constructor(private val context: Context) {
         soundPool.setOnLoadCompleteListener { _, _, status ->
             if (status == 0) loaded = true
         }
-        // Load sound resources — raw files must exist in res/raw/
         try {
-            beepId = soundPool.load(context, R.raw.beep,      1)
+            beepId = soundPool.load(context, R.raw.beep,       1)
             workId = soundPool.load(context, R.raw.work_start, 1)
             restId = soundPool.load(context, R.raw.rest_start, 1)
             doneId = soundPool.load(context, R.raw.done,       1)
@@ -54,10 +53,10 @@ class SoundManager @Inject constructor(private val context: Context) {
         }
     }
 
-    fun playBeep()      = play(beepId,  shortVibrate = false)
-    fun playWork()      = play(workId,  shortVibrate = true)
-    fun playRest()      = play(restId,  shortVibrate = true)
-    fun playDone()      = play(doneId,  shortVibrate = true)
+    override fun playBeep() = play(beepId, shortVibrate = false)
+    override fun playWork() = play(workId, shortVibrate = true)
+    override fun playRest() = play(restId, shortVibrate = true)
+    override fun playDone() = play(doneId, shortVibrate = true)
 
     private fun play(soundId: Int, shortVibrate: Boolean) {
         if (loaded && soundId != 0) soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
@@ -69,5 +68,5 @@ class SoundManager @Inject constructor(private val context: Context) {
         vibrator.vibrate(effect)
     }
 
-    fun release() = soundPool.release()
+    override fun release() = soundPool.release()
 }

@@ -4,8 +4,8 @@ import android.app.Application
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.kostasmavridis.tabataclock.audio.SoundManager
-import com.kostasmavridis.tabataclock.data.SettingsRepository
+import com.kostasmavridis.tabataclock.audio.ISoundManager
+import com.kostasmavridis.tabataclock.data.ISettingsRepository
 import com.kostasmavridis.tabataclock.model.TabataPhase
 import com.kostasmavridis.tabataclock.model.TabataSettings
 import com.kostasmavridis.tabataclock.service.TabataForegroundService
@@ -18,14 +18,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class TabataViewModel @Inject constructor(
     application: Application,
-    private val repo: SettingsRepository,
-    private val soundManager: SoundManager
+    private val repo: ISettingsRepository,
+    private val soundManager: ISoundManager
 ) : AndroidViewModel(application) {
 
     // ── Settings ──────────────────────────────────────────────────────────────
@@ -40,14 +41,14 @@ class TabataViewModel @Inject constructor(
     data class TimerState(
         val phase: TabataPhase = TabataPhase.PREPARE,
         val secondsLeft: Int = 10,
-        val phaseDurationSecs: Int = 10,   // total seconds for current phase — drives the progress arc
+        val phaseDurationSecs: Int = 10,
         val currentRound: Int = 1,
         val currentSet: Int = 1,
         val isRunning: Boolean = false,
         val isPaused: Boolean = false,
         val totalElapsedSecs: Int = 0
     ) {
-        /** 0.0 (start) → 1.0 (end) progress within the current phase */
+        /** 0.0 (phase start) → 1.0 (phase end) */
         val phaseProgress: Float
             get() = if (phaseDurationSecs <= 0) 1f
                     else 1f - (secondsLeft.toFloat() / phaseDurationSecs.toFloat())
@@ -78,9 +79,6 @@ class TabataViewModel @Inject constructor(
         notifyService(state.phase, state.secondsLeft, state.currentRound)
         timerJob = viewModelScope.launch {
             runPhase(state.phase, state.secondsLeft, state.phaseDurationSecs)
-            // After the resumed phase completes we cannot easily know where we were
-            // in the full cycle, so we restart from round 1 of the remaining sets.
-            // Full mid-cycle persistence is tracked in issue #1 (v2).
         }
     }
 
@@ -89,7 +87,7 @@ class TabataViewModel @Inject constructor(
         stopService()
         val prepareSecs = settings.value.prepareSecs
         _timerState.value = TimerState(
-            secondsLeft = prepareSecs,
+            secondsLeft       = prepareSecs,
             phaseDurationSecs = prepareSecs
         )
     }
@@ -113,20 +111,20 @@ class TabataViewModel @Inject constructor(
         soundManager.playDone()
         stopService()
         _timerState.update { it.copy(
-            phase = TabataPhase.DONE,
-            isRunning = false,
-            secondsLeft = 0,
-            phaseProgress = 1f  // compiler-friendly: computed property, no direct set needed
+            phase             = TabataPhase.DONE,
+            secondsLeft       = 0,
+            phaseDurationSecs = 0,
+            isRunning         = false
         )}
     }
 
     private suspend fun runPhase(phase: TabataPhase, durationSecs: Int, totalSecs: Int) {
         for (remaining in durationSecs downTo 1) {
             val state = _timerState.updateAndGet { it.copy(
-                phase = phase,
-                secondsLeft = remaining,
+                phase             = phase,
+                secondsLeft       = remaining,
                 phaseDurationSecs = totalSecs,
-                totalElapsedSecs = it.totalElapsedSecs + 1
+                totalElapsedSecs  = it.totalElapsedSecs + 1
             )}
             notifyService(phase, remaining, state.currentRound)
             if (remaining <= 3) soundManager.playBeep()

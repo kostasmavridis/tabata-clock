@@ -1,7 +1,9 @@
 package com.kostasmavridis.tabataclock.di
 
 import android.content.Context
+import com.kostasmavridis.tabataclock.audio.ISoundManager
 import com.kostasmavridis.tabataclock.audio.SoundManager
+import com.kostasmavridis.tabataclock.data.ISettingsRepository
 import com.kostasmavridis.tabataclock.data.SettingsRepository
 import dagger.Module
 import dagger.Provides
@@ -16,11 +18,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideSettingsRepository(@ApplicationContext context: Context): SettingsRepository =
-        SettingsRepository(context)
+    fun provideSettingsRepository(
+        @ApplicationContext context: Context
+    ): ISettingsRepository = SettingsRepository(context)
 
     @Provides
     @Singleton
-    fun provideSoundManager(@ApplicationContext context: Context): SoundManager =
-        SoundManager(context)
+    fun provideSoundManager(
+        @ApplicationContext context: Context
+    ): ISoundManager = SoundManager(context)
 }
