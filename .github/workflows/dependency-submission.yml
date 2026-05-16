@@ -2,9 +2,22 @@
 # can raise security alerts and version-update PRs.
 #
 # Runs on every push to main and can be triggered manually.
-# The gradle-wrapper.jar is NOT committed to this repo (the GitHub Contents
-# API silently corrupts binary files), so we bootstrap it from the official
-# Gradle distribution before invoking gradlew.
+#
+# WHY NOT gradle/actions/dependency-submission@v4?
+# ─────────────────────────────────────────────────
+# That action invokes ./gradlew internally via its own JVM process, which
+# runs BEFORE our bootstrap step has placed gradle-wrapper.jar on disk.
+# The result is always:
+#   "Error: Could not find or load main class org.gradle.wrapper.GradleWrapperMain"
+#
+# The correct approach for projects with a non-committed wrapper JAR is:
+#   1. Bootstrap the JAR ourselves (same pattern as build.yml)
+#   2. Use gradle/actions/setup-gradle for caching
+#   3. Invoke ./gradlew with -PgenerateAndSubmitDependencyGraph=true
+#      which triggers the dependency-submission plugin registered by setup-gradle
+#
+# See: https://github.com/gradle/actions/blob/main/docs/dependency-submission.md
+#      section "Dependency Submission without using the dependency-submission action"
 
 name: Dependency Submission
 
@@ -32,10 +45,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ── Python: generate sound WAV files ────────────────────────────────
-      # The Gradle build resolves the :app project which declares res/raw/*.wav
-      # via the generate_sounds.py script. Without these files the build
-      # configuration phase fails before dependency resolution can complete.
+      # ── Python: generate sound WAV files ─────────────────────────────────
+      # The Gradle configuration phase resolves :app which references
+      # res/raw/*.wav. Without these files the configuration phase fails
+      # before dependency resolution can complete.
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -44,17 +57,18 @@ jobs:
       - name: Generate sound files
         run: python scripts/generate_sounds.py
 
-      # ── Java ────────────────────────────────────────────────────────────
+      # ── Java ──────────────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── Bootstrap Gradle wrapper JAR ─────────────────────────────────────
-      # The gradle-wrapper.jar cannot be committed via the GitHub Contents API
-      # (binary files are silently corrupted). We download the official Gradle
-      # distribution and run `gradle wrapper` to regenerate it fresh.
+      # ── Bootstrap Gradle wrapper JAR ──────────────────────────────────────
+      # gradle-wrapper.jar is not committed (GitHub Contents API corrupts
+      # binary files). Regenerate it from the official Gradle distribution
+      # BEFORE setup-gradle runs so the JAR is present for every subsequent
+      # ./gradlew invocation, including the one setup-gradle makes internally.
       - name: Bootstrap Gradle wrapper JAR
         run: |
           GRADLE_VERSION=8.9
@@ -66,17 +80,34 @@ jobs:
             --distribution-type bin
           chmod +x gradlew
 
-      # ── Decode keystore ───────────────────────────────────────────────
-      # assembleDebug (triggered internally by dependency resolution) needs a
-      # valid signing config; provide the same keystore used by build.yml.
+      # ── Setup Gradle (enables dependency graph generation) ────────────────
+      # When dependency-submission is enabled here, setup-gradle registers a
+      # ForceDependencyResolutionPlugin internally. We then invoke ./gradlew
+      # ourselves so our bootstrapped wrapper JAR is used rather than the
+      # action's own internal invocation.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          dependency-graph: generate-and-submit
+
+      # ── Decode keystore ───────────────────────────────────────────────────
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
 
-      # ── Submit dependency graph ───────────────────────────────────────────
-      - name: Generate and submit dependency graph
-        uses: gradle/actions/dependency-submission@v4
+      # ── Resolve all dependencies ──────────────────────────────────────────
+      # setup-gradle's ForceDependencyResolutionPlugin adds the
+      # :ForceDependencyResolutionPlugin_resolveAllDependencies task.
+      # Running it through OUR gradlew (with the bootstrapped JAR) produces
+      # the dependency graph JSON that setup-gradle then submits to GitHub.
+      - name: Resolve dependencies and submit graph
         env:
           KEYSTORE_PATH: tabata-release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew \
+            -Dorg.gradle.configureondemand=false \
+            -Dorg.gradle.dependency.verification=off \
+            :ForceDependencyResolutionPlugin_resolveAllDependencies \
+            --stacktrace
