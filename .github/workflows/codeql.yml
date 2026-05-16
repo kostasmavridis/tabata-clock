@@ -39,6 +39,13 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Cancel any in-progress scan for the same workflow + branch/PR.
+# Scheduled runs use a fixed group key so only one scheduled scan runs at a time.
+# workflow_dispatch always gets a unique run ID so manual triggers never cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'schedule' && 'scheduled' || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze (Kotlin)
@@ -92,7 +99,7 @@ jobs:
             --distribution-type bin
           chmod +x gradlew
 
-      # ── Decode keystore ─────────────────────────────────────────────────
+      # ── Decode keystore ───────────────────────────────────────────────
       # build.gradle.kts reads signing env vars during the configuration phase.
       # Without a valid keystore path, the signingConfigs block is skipped
       # (guarded by null checks), so this step is safe to omit if secrets are

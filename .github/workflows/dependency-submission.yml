@@ -16,6 +16,12 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# Cancel any in-progress submission for the same branch.
+# Only the latest push to main needs to submit the graph; older runs are stale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   dependency-submission:
     runs-on: ubuntu-latest
@@ -26,7 +32,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ── Python: generate sound WAV files ─────────────────────────────────
+      # ── Python: generate sound WAV files ────────────────────────────────
       # The Gradle build resolves the :app project which declares res/raw/*.wav
       # via the generate_sounds.py script. Without these files the build
       # configuration phase fails before dependency resolution can complete.
@@ -38,14 +44,14 @@ jobs:
       - name: Generate sound files
         run: python scripts/generate_sounds.py
 
-      # ── Java ──────────────────────────────────────────────────────────────
+      # ── Java ────────────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── Bootstrap Gradle wrapper JAR ──────────────────────────────────────
+      # ── Bootstrap Gradle wrapper JAR ─────────────────────────────────────
       # The gradle-wrapper.jar cannot be committed via the GitHub Contents API
       # (binary files are silently corrupted). We download the official Gradle
       # distribution and run `gradle wrapper` to regenerate it fresh.
@@ -60,7 +66,7 @@ jobs:
             --distribution-type bin
           chmod +x gradlew
 
-      # ── Decode keystore ───────────────────────────────────────────────────
+      # ── Decode keystore ───────────────────────────────────────────────
       # assembleDebug (triggered internally by dependency resolution) needs a
       # valid signing config; provide the same keystore used by build.yml.
       - name: Decode keystore

@@ -8,6 +8,14 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# For releases: do NOT cancel in-progress runs.
+# A release build that is already signing and uploading artifacts must be
+# allowed to finish. If two release tags are pushed simultaneously (very
+# unlikely), queue the second one rather than killing the first.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Build & Publish Release
@@ -44,7 +52,7 @@ jobs:
       - name: Generate sound files
         run: python scripts/generate_sounds.py
 
-      # ── Java / Gradle ────────────────────────────────────────────────────
+      # ── Java / Gradle ─────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
@@ -52,9 +60,8 @@ jobs:
           distribution: 'temurin'
 
       # ── Bootstrap Gradle wrapper JAR ─────────────────────────────────────
-      # The gradle-wrapper.jar cannot be committed via the GitHub Contents API
-      # (binary files are silently corrupted). Download the official Gradle
-      # distribution and run `gradle wrapper` to regenerate it fresh.
+      # gradle-wrapper.jar is not committed (GitHub Contents API corrupts
+      # binary files). Regenerate it from the official Gradle distribution.
       - name: Bootstrap Gradle wrapper JAR
         run: |
           GRADLE_VERSION=8.9
@@ -75,7 +82,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # ── Decode keystore ──────────────────────────────────────────────────
+      # ── Decode keystore ─────────────────────────────────────────────────
       - name: Decode keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode \
