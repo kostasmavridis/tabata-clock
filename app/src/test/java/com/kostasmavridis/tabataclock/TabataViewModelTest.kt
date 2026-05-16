@@ -218,7 +218,7 @@ class TabataViewModelTest {
     @DisplayName("Full cycle")
     inner class FullCycle {
 
-        // 3s prepare + 4s work + 2s rest + 4s work = 13 seconds total
+        // 3s prepare + 4s work + 2s rest + 4s work = 13 seconds total (sets=1, rounds=2)
         private val totalMs =
             (fastSettings.prepareSecs + fastSettings.workSecs +
              fastSettings.restSecs    + fastSettings.workSecs) * 1_000L
@@ -284,10 +284,14 @@ class TabataViewModelTest {
             val twoSets = fastSettings.copy(sets = 2)
             repo.flow.value = twoSets
             vm.reset()
-            // 3s prepare + 2*(2 rounds: 4s work + 2s rest + 4s work) = 3 + 2*10 = 23s
+            // ViewModel runs: PREPARE + for each (set, round): WORK + REST (except last round)
+            // sets=2, rounds=2, work=4, rest=2:
+            //   prepare(3) + work(4)+rest(2) + work(4)+rest(2) + work(4)+rest(2) + work(4)
+            //   = 3 + 4*4 + 3*2 = 3 + 16 + 6 = 25s
+            // Formula: prepare + sets*rounds*work + (sets*rounds - 1)*rest
             val totalMs = (twoSets.prepareSecs +
-                twoSets.sets * (twoSets.rounds * twoSets.workSecs +
-                    (twoSets.rounds - 1) * twoSets.restSecs)) * 1_000L
+                twoSets.sets * twoSets.rounds * twoSets.workSecs +
+                (twoSets.sets * twoSets.rounds - 1) * twoSets.restSecs) * 1_000L
             vm.start()
             advanceTimeBy(totalMs + 500L)
             assertEquals(TabataPhase.DONE, vm.timerState.value.phase)
@@ -381,7 +385,7 @@ class TabataViewModelTest {
         @Test
         @DisplayName("totalWorkoutSecs excludes trailing rest")
         fun `totalWorkoutSecs is correct for fastSettings`() {
-            // 2 rounds: work(4) + rest(2) + work(4) → 10s
+            // sets=1, rounds=2, work=4, rest=2: 1*2*(4+2) - 2 = 12 - 2 = 10s
             assertEquals(10, fastSettings.totalWorkoutSecs())
         }
 
@@ -399,9 +403,10 @@ class TabataViewModelTest {
         @Test
         @DisplayName("totalWorkoutSecs scales correctly with multiple sets")
         fun `totalWorkoutSecs with two sets`() {
-            // sets=2, rounds=2, work=4, rest=2 → 2*(2*4 + 1*2) - 2 = 2*10 - 2 = 18
+            // sets=2, rounds=2, work=4, rest=2
+            // Formula: sets * rounds * (work + rest) - rest = 2*2*(4+2) - 2 = 24 - 2 = 22
             val s = fastSettings.copy(sets = 2)
-            assertEquals(18, s.totalWorkoutSecs())
+            assertEquals(22, s.totalWorkoutSecs())
         }
     }
 }
