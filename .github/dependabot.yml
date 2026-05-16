@@ -1,0 +1,160 @@
+# Dependabot version update configuration
+# Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Strategy
+# ────────
+# • Gradle (Maven)  — weekly on Monday, grouped by ecosystem layer to keep PRs minimal
+# • GitHub Actions  — weekly on Monday, auto-assign + auto-label
+# • pip             — not configured; generate_sounds.py uses only Python stdlib (no pip deps)
+#
+# Grouping rationale
+# ──────────────────
+# Kotlin + KSP must be bumped together (KSP version is tied to Kotlin: "<kotlin>-<ksp>").
+# AGP + Gradle wrapper must be compatible — grouped so a single PR covers both.
+# Compose BOM governs all compose.* transitive versions; grouped with Navigation and Activity.
+# Lifecycle libs share a version ref — grouped to avoid partial upgrades.
+# Hilt + hilt-navigation-compose — grouped to keep DI wiring consistent.
+# Test dependencies are grouped separately; a failing test dep never blocks production deps.
+
+version: 2
+
+updates:
+
+  # ───────────────────────────────────────────────────────────────────────────────
+  # 1. Gradle / Maven dependencies (libs.versions.toml + build.gradle.kts)
+  # ───────────────────────────────────────────────────────────────────────────────
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Athens"
+    open-pull-requests-limit: 10
+    assignees:
+      - "kostasmavridis"
+    labels:
+      - "dependencies"
+      - "gradle"
+    commit-message:
+      prefix: "build"
+      prefix-development: "build"
+      include: "scope"
+    reviewers: []
+    # ── Groups ──────────────────────────────────────────────────────────────────
+    groups:
+
+      # Kotlin language + KSP must always be upgraded together.
+      # KSP version format is "<kotlin-version>-<ksp-patch>", so they are inseparable.
+      kotlin-ksp:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Android Gradle Plugin + Gradle wrapper are tightly coupled.
+      # AGP release notes always specify a minimum supported Gradle version.
+      agp-gradle:
+        patterns:
+          - "com.android.tools.build*"
+          - "com.android.application*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Compose BOM governs compose.ui.*, compose.material3, etc.
+      # Bump together with Activity and Navigation which have Compose-specific APIs.
+      compose-ui:
+        patterns:
+          - "androidx.compose*"
+          - "androidx.activity*"
+          - "androidx.navigation*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # All Lifecycle artifacts share a single version ref in libs.versions.toml.
+      # Partial upgrades cause incompatible API versions at compile time.
+      lifecycle:
+        patterns:
+          - "androidx.lifecycle*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Hilt (Dagger) + hilt-navigation-compose must stay in sync.
+      # hilt-navigation-compose has its own version but must be compatible with hilt-android.
+      hilt:
+        patterns:
+          - "com.google.dagger*"
+          - "androidx.hilt*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # Core AndroidX utilities (core-ktx, datastore).
+      androidx-core:
+        patterns:
+          - "androidx.core*"
+          - "androidx.datastore*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      # All test-scope dependencies in one PR so they don’t block production dependency reviews.
+      # Includes JUnit 5, Turbine, MockK, coroutines-test, Kover, android-junit5 plugin.
+      test-dependencies:
+        patterns:
+          - "org.junit*"
+          - "app.cash.turbine*"
+          - "io.mockk*"
+          - "org.jetbrains.kotlinx:kotlinx-coroutines-test*"
+          - "org.jetbrains.kotlinx.kover*"
+          - "de.mannodermaus*"
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+
+    # ── Ignore rules ───────────────────────────────────────────────────────────────
+    ignore:
+      # Never auto-bump major versions — these are breaking changes that require
+      # deliberate migration work and should never land via an automated PR.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # ───────────────────────────────────────────────────────────────────────────────
+  # 2. GitHub Actions (workflows/*.yml)
+  # ───────────────────────────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Athens"
+    open-pull-requests-limit: 5
+    assignees:
+      - "kostasmavridis"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      # Batch all GitHub Actions updates into one PR per week.
+      # Individual action bumps are low-risk; a single PR is easier to review.
+      github-actions-all:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Block major version bumps on Actions too — e.g. actions/checkout@v3 → v4
+      # requires explicit review of breaking changes in the action.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
