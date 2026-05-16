@@ -1,0 +1,76 @@
+# Submits the Gradle dependency graph to GitHub so that Dependabot
+# can raise security alerts and version-update PRs.
+#
+# Runs on every push to main and can be triggered manually.
+# The gradle-wrapper.jar is NOT committed to this repo (the GitHub Contents
+# API silently corrupts binary files), so we bootstrap it from the official
+# Gradle distribution before invoking gradlew.
+
+name: Dependency Submission
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  dependency-submission:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to submit the dependency graph
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # ── Python: generate sound WAV files ─────────────────────────────────
+      # The Gradle build resolves the :app project which declares res/raw/*.wav
+      # via the generate_sounds.py script. Without these files the build
+      # configuration phase fails before dependency resolution can complete.
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate sound files
+        run: python scripts/generate_sounds.py
+
+      # ── Java ──────────────────────────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ── Bootstrap Gradle wrapper JAR ──────────────────────────────────────
+      # The gradle-wrapper.jar cannot be committed via the GitHub Contents API
+      # (binary files are silently corrupted). We download the official Gradle
+      # distribution and run `gradle wrapper` to regenerate it fresh.
+      - name: Bootstrap Gradle wrapper JAR
+        run: |
+          GRADLE_VERSION=8.9
+          curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
+               -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          /tmp/gradle-dist/gradle-${GRADLE_VERSION}/bin/gradle wrapper \
+            --gradle-version ${GRADLE_VERSION} \
+            --distribution-type bin
+          chmod +x gradlew
+
+      # ── Decode keystore ───────────────────────────────────────────────────
+      # assembleDebug (triggered internally by dependency resolution) needs a
+      # valid signing config; provide the same keystore used by build.yml.
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
+
+      # ── Submit dependency graph ───────────────────────────────────────────
+      - name: Generate and submit dependency graph
+        uses: gradle/actions/dependency-submission@v4
+        env:
+          KEYSTORE_PATH: tabata-release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
