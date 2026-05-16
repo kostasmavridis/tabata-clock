@@ -58,7 +58,7 @@ class TabataViewModelTest {
         Dispatchers.resetMain()
     }
 
-    // ───────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────────
     @Nested
     @DisplayName("Initial state")
     inner class InitialState {
@@ -88,7 +88,7 @@ class TabataViewModelTest {
         }
     }
 
-    // ───────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────────
     @Nested
     @DisplayName("start()")
     inner class Start {
@@ -126,7 +126,7 @@ class TabataViewModelTest {
         }
     }
 
-    // ───────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────────
     @Nested
     @DisplayName("pause() and resume()")
     inner class PauseResume {
@@ -170,9 +170,21 @@ class TabataViewModelTest {
             vm.resume() // not paused — should be ignored
             assertTrue(vm.timerState.value.isRunning)
         }
+
+        @Test
+        @DisplayName("countdown continues from paused secondsLeft after resume")
+        fun `resume continues countdown from paused position`() = runTest {
+            vm.start()
+            advanceTimeBy(1_100L) // 1 second elapsed
+            vm.pause()
+            val secsBeforeResume = vm.timerState.value.secondsLeft
+            vm.resume()
+            advanceTimeBy(1_100L) // 1 more second
+            assertEquals(secsBeforeResume - 1, vm.timerState.value.secondsLeft)
+        }
     }
 
-    // ───────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────────
     @Nested
     @DisplayName("reset()")
     inner class Reset {
@@ -201,7 +213,7 @@ class TabataViewModelTest {
         }
     }
 
-    // ───────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────────
     @Nested
     @DisplayName("Full cycle")
     inner class FullCycle {
@@ -256,9 +268,38 @@ class TabataViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+        @Test
+        @DisplayName("playBeep() fires during last 3 seconds of a phase")
+        fun `beep plays in last 3 seconds of prepare`() = runTest {
+            // prepareSecs=3: all 3 ticks are within the last-3-seconds window
+            vm.start()
+            advanceTimeBy(fastSettings.prepareSecs * 1_000L + 500L)
+            assertEquals(fastSettings.prepareSecs, sound.beepCount)
+        }
+
+        @Test
+        @DisplayName("multi-set cycle reaches DONE and plays correct sounds")
+        fun `two sets cycle completes correctly`() = runTest {
+            val twoSets = fastSettings.copy(sets = 2)
+            repo.flow.value = twoSets
+            vm.reset()
+            // 3s prepare + 2*(2 rounds: 4s work + 2s rest + 4s work) = 3 + 2*10 = 23s
+            val totalMs = (twoSets.prepareSecs +
+                twoSets.sets * (twoSets.rounds * twoSets.workSecs +
+                    (twoSets.rounds - 1) * twoSets.restSecs)) * 1_000L
+            vm.start()
+            advanceTimeBy(totalMs + 500L)
+            assertEquals(TabataPhase.DONE, vm.timerState.value.phase)
+            assertFalse(vm.timerState.value.isRunning)
+            // 2 sets * 2 rounds = 4 work sounds
+            assertEquals(twoSets.sets * twoSets.rounds, sound.workCount)
+            // done plays exactly once
+            assertEquals(1, sound.doneCount)
+        }
     }
 
-    // ───────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────────
     @Nested
     @DisplayName("phaseProgress")
     inner class PhaseProgress {
@@ -278,9 +319,17 @@ class TabataViewModelTest {
             advanceTimeBy(totalMs + 500L)
             assertEquals(1f, vm.timerState.value.phaseProgress, 0.01f)
         }
+
+        @Test
+        @DisplayName("phaseProgress is 1.0 when phaseDurationSecs is 0")
+        fun `progress is 1 when phaseDurationSecs is zero`() {
+            // TimerState with phaseDurationSecs=0 should return 1f (guard branch)
+            val state = TabataViewModel.TimerState(phaseDurationSecs = 0)
+            assertEquals(1f, state.phaseProgress, 0.01f)
+        }
     }
 
-    // ───────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────────
     @Nested
     @DisplayName("Settings")
     inner class SettingsTests {
@@ -313,10 +362,21 @@ class TabataViewModelTest {
         }
     }
 
-    // ───────────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────────────────────
     @Nested
     @DisplayName("TabataSettings model")
     inner class TabataSettingsModel {
+
+        @Test
+        @DisplayName("default settings have correct values")
+        fun `default settings are correct`() {
+            val defaults = TabataSettings()
+            assertEquals(10, defaults.prepareSecs)
+            assertEquals(20, defaults.workSecs)
+            assertEquals(10, defaults.restSecs)
+            assertEquals(8,  defaults.rounds)
+            assertEquals(1,  defaults.sets)
+        }
 
         @Test
         @DisplayName("totalWorkoutSecs excludes trailing rest")
@@ -334,6 +394,14 @@ class TabataViewModelTest {
         @DisplayName("totalWorkoutSecs parametrized by round count")
         fun `totalWorkoutSecs parametrized`(rounds: Int, expected: Int) {
             assertEquals(expected, fastSettings.copy(rounds = rounds).totalWorkoutSecs())
+        }
+
+        @Test
+        @DisplayName("totalWorkoutSecs scales correctly with multiple sets")
+        fun `totalWorkoutSecs with two sets`() {
+            // sets=2, rounds=2, work=4, rest=2 → 2*(2*4 + 1*2) - 2 = 2*10 - 2 = 18
+            val s = fastSettings.copy(sets = 2)
+            assertEquals(18, s.totalWorkoutSecs())
         }
     }
 }
