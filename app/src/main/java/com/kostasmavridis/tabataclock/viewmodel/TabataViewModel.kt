@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
@@ -30,8 +31,11 @@ class TabataViewModel @Inject constructor(
 ) : AndroidViewModel(application) {
 
     // ── Settings ──────────────────────────────────────────────────────────────
+    // Eagerly: value is synchronously available the moment the flow emits its
+    // first item (which FakeSettingsRepository does immediately). This guarantees
+    // settings.value is never stale when start()/reset() read it.
     val settings: StateFlow<TabataSettings> = repo.settingsFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TabataSettings())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, TabataSettings())
 
     fun updateSettings(s: TabataSettings) {
         viewModelScope.launch { repo.saveSettings(s) }
@@ -40,8 +44,8 @@ class TabataViewModel @Inject constructor(
     // ── Timer State ───────────────────────────────────────────────────────────
     data class TimerState(
         val phase: TabataPhase = TabataPhase.PREPARE,
-        val secondsLeft: Int = 10,
-        val phaseDurationSecs: Int = 10,
+        val secondsLeft: Int = 0,
+        val phaseDurationSecs: Int = 0,
         val currentRound: Int = 1,
         val currentSet: Int = 1,
         val isRunning: Boolean = false,
@@ -54,7 +58,12 @@ class TabataViewModel @Inject constructor(
                     else 1f - (secondsLeft.toFloat() / phaseDurationSecs.toFloat())
     }
 
-    private val _timerState = MutableStateFlow(TimerState())
+    private val _timerState = MutableStateFlow(
+        TimerState(
+            secondsLeft       = settings.value.prepareSecs,
+            phaseDurationSecs = settings.value.prepareSecs
+        )
+    )
     val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
 
     private var timerJob: Job? = null
@@ -94,7 +103,8 @@ class TabataViewModel @Inject constructor(
 
     // ── Cycle Logic ───────────────────────────────────────────────────────────
     private suspend fun runTabataCycle() {
-        val s = settings.value
+        // Re-read settings fresh at the moment start() fires, not at VM creation.
+        val s = repo.settingsFlow.first()
         runPhase(TabataPhase.PREPARE, s.prepareSecs, s.prepareSecs)
         for (set in 1..s.sets) {
             for (round in 1..s.rounds) {
@@ -110,22 +120,26 @@ class TabataViewModel @Inject constructor(
         }
         soundManager.playDone()
         stopService()
-        _timerState.update { it.copy(
-            phase             = TabataPhase.DONE,
-            secondsLeft       = 0,
-            phaseDurationSecs = 0,
-            isRunning         = false
-        )}
+        _timerState.update {
+            it.copy(
+                phase             = TabataPhase.DONE,
+                secondsLeft       = 0,
+                phaseDurationSecs = 0,
+                isRunning         = false
+            )
+        }
     }
 
     private suspend fun runPhase(phase: TabataPhase, durationSecs: Int, totalSecs: Int) {
         for (remaining in durationSecs downTo 1) {
-            val state = _timerState.updateAndGet { it.copy(
-                phase             = phase,
-                secondsLeft       = remaining,
-                phaseDurationSecs = totalSecs,
-                totalElapsedSecs  = it.totalElapsedSecs + 1
-            )}
+            val state = _timerState.updateAndGet {
+                it.copy(
+                    phase             = phase,
+                    secondsLeft       = remaining,
+                    phaseDurationSecs = totalSecs,
+                    totalElapsedSecs  = it.totalElapsedSecs + 1
+                )
+            }
             notifyService(phase, remaining, state.currentRound)
             if (remaining <= 3) soundManager.playBeep()
             delay(1_000L)
