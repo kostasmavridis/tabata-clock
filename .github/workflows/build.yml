@@ -13,6 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python (sound generator)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate sound files
+        run: python scripts/generate_sounds.py
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
