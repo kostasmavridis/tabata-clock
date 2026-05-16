@@ -56,6 +56,17 @@ jobs:
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
 
+      # ── Debug signing ───────────────────────────────────────────────────────
+      - name: Debug signing config
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          echo "KEY_ALIAS=[${KEY_ALIAS}]"
+          ls -la app/tabata-release.keystore
+          keytool -list -keystore app/tabata-release.keystore \
+            -storepass "${KEYSTORE_PASSWORD}" -storetype PKCS12
+
       # ── Tests ─────────────────────────────────────────────────────────────
       - name: Run unit tests
         run: ./gradlew test --stacktrace --rerun-tasks
