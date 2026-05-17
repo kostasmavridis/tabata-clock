@@ -25,6 +25,8 @@
       --radius-card:24px; --radius-pill:100px;
     }
     html,body { height:100%; font-family:'Space Grotesk','Inter',sans-serif; background:var(--bg-core); color:var(--text-primary); overflow-x:hidden; -webkit-font-smoothing:antialiased; }
+
+    /* ── Background mesh ── */
     #bg-mesh { position:fixed; inset:0; z-index:0; transition:background 0.9s var(--easing-smooth); }
     #bg-mesh::before,#bg-mesh::after { content:''; position:absolute; border-radius:50%; filter:blur(120px); opacity:0.35; transition:all 0.9s var(--easing-smooth); }
     #bg-mesh::before { width:600px; height:600px; top:-200px; left:-150px; }
@@ -37,35 +39,61 @@
     body.phase-rest #bg-mesh::before { background:var(--rest-a); } body.phase-rest #bg-mesh::after { background:var(--rest-b); }
     body.phase-done #bg-mesh { background:radial-gradient(ellipse at 50% 40%,rgba(155,89,182,0.30) 0%,transparent 60%),var(--bg-core); }
     body.phase-done #bg-mesh::before { background:var(--done-a); } body.phase-done #bg-mesh::after { background:var(--done-b); }
-    #app { position:relative; z-index:1; min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px 16px 32px; }
+
+    /* ── Header ── */
     header { position:fixed; top:0; left:0; right:0; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:16px 28px; background:rgba(6,6,15,0.55); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border-bottom:1px solid var(--glass-border); }
     .logo { font-size:1.1rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; background:linear-gradient(90deg,#fff 0%,rgba(255,255,255,0.55) 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
     .logo span { background:linear-gradient(90deg,var(--work-a),var(--work-b)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
     .header-badge { font-size:0.72rem; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); border:1px solid var(--glass-border); padding:4px 12px; border-radius:var(--radius-pill); }
-    main { width:100%; max-width:920px; display:flex; flex-direction:column; align-items:center; gap:32px; margin-top:80px; }
+
+    /* ── App shell ── */
+    #app { position:relative; z-index:1; min-height:100dvh; display:flex; flex-direction:column; align-items:center; padding:88px 16px 40px; }
+
+    /* ── Main layout: single column always, side-by-side on wide screens ── */
+    main {
+      width:100%; max-width:560px;
+      display:flex; flex-direction:column;
+      align-items:center; gap:28px;
+    }
+
+    /* ── Phase label ── */
     #phase-label { font-size:clamp(0.85rem,2vw,1rem); font-weight:600; letter-spacing:0.32em; text-transform:uppercase; color:var(--text-muted); transition:color 0.6s var(--easing-smooth); }
     #phase-label.phase-work { color:var(--work-a); } #phase-label.phase-rest { color:var(--rest-a); } #phase-label.phase-prepare { color:var(--prep-b); } #phase-label.phase-done { color:var(--done-a); }
+
+    /* ── Timer ring ── */
     .ring-wrapper { position:relative; display:flex; align-items:center; justify-content:center; }
+    /* The SVG ring circles are drawn rotated -90deg so progress starts at top.
+       The text group inside is NOT rotated in CSS — only via SVG transform attribute. */
     #timer-ring { transform:rotate(-90deg); overflow:visible; }
     .ring-track { fill:none; stroke:rgba(255,255,255,0.07); stroke-width:6; }
     .ring-progress { fill:none; stroke-width:7; stroke-linecap:round; transition:stroke-dashoffset 0.95s cubic-bezier(0.25,0.46,0.45,0.94),stroke 0.6s var(--easing-smooth),filter 0.6s var(--easing-smooth); }
     .ring-glow { fill:none; stroke-width:18; stroke-linecap:round; opacity:0; transition:opacity 0.6s,stroke 0.6s; }
-    body.phase-work .ring-glow { stroke:rgba(255,77,109,0.22); opacity:1; } body.phase-rest .ring-glow { stroke:rgba(0,212,255,0.22); opacity:1; } body.phase-prepare .ring-glow { stroke:rgba(65,105,225,0.22); opacity:1; }
-    #timer-digits-group { transform:rotate(90deg); }
+    body.phase-work .ring-glow { stroke:rgba(255,77,109,0.22); opacity:1; }
+    body.phase-rest .ring-glow { stroke:rgba(0,212,255,0.22); opacity:1; }
+    body.phase-prepare .ring-glow { stroke:rgba(65,105,225,0.22); opacity:1; }
+
+    /* Text group: counter-rotates in SVG attribute, no CSS transform needed */
     #timer-seconds { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:88px; fill:#fff; text-anchor:middle; dominant-baseline:middle; letter-spacing:-2px; }
     #timer-sub { font-family:'Inter',sans-serif; font-weight:500; font-size:13px; fill:rgba(255,255,255,0.4); text-anchor:middle; dominant-baseline:middle; letter-spacing:3px; }
-    @keyframes pulse-dot { 0%,100%{opacity:0.6;r:4} 50%{opacity:1;r:6} }
+
+    @keyframes pulse-dot { 0%,100%{opacity:0.6} 50%{opacity:1} }
     .live-dot { fill:var(--work-a); animation:pulse-dot 1.2s ease-in-out infinite; }
     .live-dot.rest { fill:var(--rest-a); } .live-dot.hidden { opacity:0; animation:none; }
+
+    /* ── Round pips ── */
     #round-pips { display:flex; gap:7px; align-items:center; justify-content:center; flex-wrap:wrap; max-width:320px; }
     .pip { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.15); transition:background 0.4s var(--easing-smooth),transform 0.35s var(--easing-bounce),box-shadow 0.4s; }
     .pip.done { background:rgba(255,255,255,0.55); }
     .pip.current { background:#fff; transform:scale(1.45); box-shadow:0 0 10px 2px rgba(255,255,255,0.55); }
     .pip.current.work { background:var(--work-a); box-shadow:0 0 12px 3px rgba(255,77,109,0.65); }
     .pip.current.rest { background:var(--rest-a); box-shadow:0 0 12px 3px rgba(0,212,255,0.65); }
+
+    /* ── Meta chips ── */
     .meta-row { display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap; }
     .chip { background:var(--glass-bg); border:1px solid var(--glass-border); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border-radius:var(--radius-pill); padding:6px 16px; font-size:0.78rem; font-weight:600; letter-spacing:0.06em; color:var(--text-muted); }
     .chip strong { color:var(--text-primary); }
+
+    /* ── Controls ── */
     .controls { display:flex; align-items:center; gap:18px; }
     .btn-icon { width:52px; height:52px; border-radius:50%; border:1px solid var(--glass-border); background:var(--glass-bg); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); color:rgba(255,255,255,0.75); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.25s,transform 0.2s var(--easing-bounce); font-size:20px; }
     .btn-icon:hover { background:rgba(255,255,255,0.10); transform:scale(1.08); }
@@ -77,7 +105,11 @@
     .btn-primary.rest .btn-primary-inner { background:linear-gradient(135deg,var(--rest-a) 0%,var(--rest-b) 100%); box-shadow:0 8px 32px rgba(0,212,255,0.45); }
     .btn-primary.prepare .btn-primary-inner { background:linear-gradient(135deg,var(--prep-a) 0%,var(--prep-b) 100%); box-shadow:0 8px 32px rgba(65,105,225,0.45); }
     .btn-primary:hover { transform:scale(1.08); } .btn-primary:active { transform:scale(0.95); }
-    .settings-panel { width:100%; max-width:600px; background:var(--glass-bg); border:1px solid var(--glass-border); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border-radius:var(--radius-card); padding:28px 32px; display:grid; grid-template-columns:1fr 1fr; gap:20px 32px; }
+
+    /* ── Settings toggle + panel ── */
+    .btn-settings-toggle { display:flex; align-items:center; gap:6px; padding:8px 18px; border-radius:var(--radius-pill); border:1px solid var(--glass-border); background:var(--glass-bg); backdrop-filter:blur(10px); color:var(--text-muted); font-family:inherit; font-size:0.78rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; transition:background 0.25s,color 0.25s,transform 0.2s; }
+    .btn-settings-toggle:hover { background:rgba(255,255,255,0.09); color:#fff; transform:scale(1.04); }
+    .settings-panel { width:100%; background:var(--glass-bg); border:1px solid var(--glass-border); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border-radius:var(--radius-card); padding:24px; display:grid; grid-template-columns:1fr 1fr; gap:20px 24px; }
     .settings-panel.hidden { display:none; }
     .setting-group { display:flex; flex-direction:column; gap:10px; }
     .setting-label { display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); }
@@ -87,61 +119,90 @@
     .settings-full-row { grid-column:1/-1; display:flex; justify-content:center; }
     .btn-save { padding:10px 36px; border-radius:var(--radius-pill); border:1px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.08); color:#fff; font-family:inherit; font-size:0.85rem; font-weight:600; cursor:pointer; transition:background 0.25s,transform 0.2s; }
     .btn-save:hover { background:rgba(255,255,255,0.15); transform:scale(1.04); }
+
+    /* ── Done overlay ── */
     #done-overlay { position:fixed; inset:0; z-index:200; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(6,6,15,0.80); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); opacity:0; pointer-events:none; transition:opacity 0.5s; }
     #done-overlay.visible { opacity:1; pointer-events:all; }
     .done-emoji { font-size:72px; margin-bottom:16px; }
     .done-title { font-size:clamp(2rem,6vw,3.5rem); font-weight:900; letter-spacing:-0.03em; background:linear-gradient(90deg,var(--done-a),var(--done-b)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px; }
     .done-sub { color:var(--text-muted); font-size:1rem; margin-bottom:32px; }
     .btn-done { padding:14px 40px; border-radius:var(--radius-pill); border:none; background:linear-gradient(135deg,var(--done-a),var(--done-b)); color:#fff; font-family:inherit; font-size:1rem; font-weight:700; cursor:pointer; box-shadow:0 8px 32px rgba(155,89,182,0.45); }
+
+    /* ── Phase flash ── */
     @keyframes phase-flash { 0%{opacity:0.55} 100%{opacity:0} }
     #phase-flash { position:fixed; inset:0; z-index:100; pointer-events:none; opacity:0; }
     #phase-flash.flash-work { animation:phase-flash 0.45s ease-out forwards; background:radial-gradient(ellipse at center,rgba(255,77,109,0.28) 0%,transparent 70%); }
     #phase-flash.flash-rest { animation:phase-flash 0.45s ease-out forwards; background:radial-gradient(ellipse at center,rgba(0,212,255,0.25) 0%,transparent 70%); }
-    .btn-settings-toggle { display:flex; align-items:center; gap:6px; padding:8px 18px; border-radius:var(--radius-pill); border:1px solid var(--glass-border); background:var(--glass-bg); backdrop-filter:blur(10px); color:var(--text-muted); font-family:inherit; font-size:0.78rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; transition:background 0.25s,color 0.25s,transform 0.2s; }
-    .btn-settings-toggle:hover { background:rgba(255,255,255,0.09); color:#fff; transform:scale(1.04); }
-    @media(max-width:560px){.settings-panel{grid-template-columns:1fr;padding:22px 20px} header{padding:12px 18px} #timer-seconds{font-size:72px}}
-    @media(min-width:900px){main{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:40px;margin-top:100px} .left-col{display:flex;flex-direction:column;align-items:center;gap:28px} .right-col{display:flex;flex-direction:column;align-items:center;gap:24px;padding-top:12px}}
+
+    /* ── Responsive ── */
+    @media(max-width:400px) {
+      #timer-ring { width:240px; height:240px; }
+      #timer-seconds { font-size:72px; }
+    }
+    @media(min-width:800px) {
+      main { flex-direction:row; flex-wrap:wrap; max-width:860px; align-items:flex-start; justify-content:center; gap:40px; }
+      .left-col  { display:flex; flex-direction:column; align-items:center; gap:28px; flex:0 0 auto; }
+      .right-col { display:flex; flex-direction:column; align-items:center; gap:20px; flex:1 1 300px; padding-top:8px; }
+    }
   </style>
 </head>
 <body class="phase-prepare">
   <div id="bg-mesh"></div>
   <div id="phase-flash"></div>
+
   <div id="done-overlay">
     <div class="done-emoji">🔥</div>
     <div class="done-title">Session Complete</div>
     <div class="done-sub" id="done-sub-text">Well done — workout finished!</div>
     <button class="btn-done" onclick="resetAll()">Start Again</button>
   </div>
+
   <header>
     <div class="logo">Tabata<span>Clock</span></div>
     <div class="header-badge">Web Dashboard</div>
   </header>
+
   <div id="app">
     <main id="main-layout">
+
+      <!-- Left column: ring + controls -->
       <div class="left-col">
         <div id="phase-label">Ready</div>
+
         <div class="ring-wrapper">
           <svg id="timer-ring" width="280" height="280" viewBox="0 0 280 280">
             <defs>
-              <filter id="glow-work" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-              <filter id="glow-rest" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="glow-work" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="6" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <filter id="glow-rest" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="6" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
             </defs>
-            <circle class="ring-track" cx="140" cy="140" r="120"/>
-            <circle class="ring-glow" cx="140" cy="140" r="120" id="ring-glow-el"/>
-            <circle class="ring-progress" cx="140" cy="140" r="120" id="ring-progress-el" stroke="#FF4D6D" stroke-dasharray="753.98" stroke-dashoffset="0" filter="url(#glow-work)"/>
-            <g id="timer-digits-group" transform="rotate(90,140,140)">
+            <circle class="ring-track"    cx="140" cy="140" r="120"/>
+            <circle class="ring-glow"     cx="140" cy="140" r="120" id="ring-glow-el"/>
+            <circle class="ring-progress" cx="140" cy="140" r="120" id="ring-progress-el"
+                    stroke="#FF4D6D" stroke-dasharray="753.98" stroke-dashoffset="0"
+                    filter="url(#glow-work)"/>
+            <!-- Counter-rotate the text group so it stays upright while the SVG ring is rotated -90deg -->
+            <g transform="rotate(90,140,140)">
               <text id="timer-seconds" x="140" y="132">20</text>
-              <text id="timer-sub" x="140" y="168">SECONDS</text>
+              <text id="timer-sub"     x="140" y="168">SECONDS</text>
               <circle class="live-dot hidden" id="live-dot" cx="140" cy="194" r="4"/>
             </g>
           </svg>
         </div>
+
         <div id="round-pips"></div>
+
         <div class="meta-row">
           <div class="chip">Round <strong id="chip-round">—</strong></div>
           <div class="chip">Set <strong id="chip-set">—</strong></div>
           <div class="chip">Total <strong id="chip-total">—</strong></div>
         </div>
+
         <div class="controls">
           <button class="btn-icon" onclick="resetAll()">&#8635;</button>
           <button class="btn-primary prepare" id="btn-play" onclick="handlePlayPause()">
@@ -153,6 +214,8 @@
           <button class="btn-icon" onclick="skipPhase()">&#9178;</button>
         </div>
       </div>
+
+      <!-- Right column: settings (below controls on mobile, beside on desktop) -->
       <div class="right-col">
         <button class="btn-settings-toggle" onclick="toggleSettings()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
@@ -168,8 +231,10 @@
           <div class="settings-full-row"><button class="btn-save" onclick="applySettings()">Apply & Reset</button></div>
         </div>
       </div>
+
     </main>
   </div>
+
   <script>
     const PHASES={PREPARE:'prepare',WORK:'work',REST:'rest',SET_REST:'set_rest',DONE:'done'};
     let cfg={prepareSecs:10,workSecs:20,restSecs:10,rounds:8,sets:1,setRestSecs:60};
