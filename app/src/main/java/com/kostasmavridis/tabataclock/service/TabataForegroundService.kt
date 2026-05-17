@@ -18,6 +18,12 @@ import com.kostasmavridis.tabataclock.R
  * The ViewModel drives all timer logic; this service exists solely to post a
  * persistent notification so Android won't kill the process.
  *
+ * foregroundServiceType = mediaPlayback:
+ *   The service plays audio cues during workout phases. This type requires only
+ *   FOREGROUND_SERVICE_MEDIA_PLAYBACK — no sensor permissions needed.
+ *   The 'health' type was incorrect as it mandates ACTIVITY_RECOGNITION /
+ *   BODY_SENSORS / HIGH_SAMPLING_RATE_SENSORS (Android 14+).
+ *
  * Start it when the user presses Play; stop it on Reset or when the cycle completes.
  *
  * Lifecycle notes
@@ -26,7 +32,7 @@ import com.kostasmavridis.tabataclock.R
  * running inside viewModelScope. If Android kills the process, both the ViewModel
  * coroutine and this service are destroyed together. There is nothing to re-display,
  * so the service must NOT be auto-restarted with a null Intent (which is what
- * START_STICKY would do, resulting in a stale "GET READY / 0s" notification).
+ * START_STICKY would do, resulting in a stale notification).
  */
 class TabataForegroundService : Service() {
 
@@ -52,17 +58,13 @@ class TabataForegroundService : Service() {
         try {
             startForeground(NOTIFICATION_ID, buildNotification(phase, seconds, round))
         } catch (e: Exception) {
-            // Catches SecurityException / ForegroundServiceStartNotAllowedException
-            // on Android 13+ when POST_NOTIFICATIONS was denied after the service
-            // was already started (race condition). Stop gracefully instead of crashing.
+            // Safety net: catches any residual SecurityException or
+            // ForegroundServiceStartNotAllowedException that slips through.
             Log.e(TAG, "startForeground failed — stopping service: ${e.message}")
             stopSelf()
             return START_NOT_STICKY
         }
 
-        // START_NOT_STICKY: the ViewModel coroutine owns timer state.
-        // If Android kills this process, the ViewModel is also gone — do not
-        // restart with a null Intent (which would show stale notification data).
         return START_NOT_STICKY
     }
 
@@ -70,16 +72,14 @@ class TabataForegroundService : Service() {
         val openIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java).apply {
-                // FLAG_ACTIVITY_SINGLE_TOP: bring existing MainActivity to front
-                // rather than creating a new instance over the existing one.
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
             },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_timer_notification)
-            .setContentTitle("Tabata \u2014 $phase")
-            .setContentText("$secondsLeft s  \u2022  Round $round")
+            .setContentTitle("Tabata — $phase")
+            .setContentText("$secondsLeft s  •  Round $round")
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(openIntent)
