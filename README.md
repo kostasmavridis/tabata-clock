@@ -20,7 +20,7 @@ Built with Kotlin · Jetpack Compose · MVVM · Hilt · Coroutines
 ### Stack
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.21-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose BOM](https://img.shields.io/badge/Compose%20BOM-2026.05.00-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![Hilt](https://img.shields.io/badge/Hilt-2.57.2-FF6F00?logo=google&logoColor=white)](https://dagger.dev/hilt/)
+[![Hilt](https://img.shields.io/badge/Hilt-2.59.2-FF6F00?logo=google&logoColor=white)](https://dagger.dev/hilt/)
 [![Min SDK](https://img.shields.io/badge/Min%20SDK-26%20(Android%208.0)-brightgreen?logo=android)](https://developer.android.com/about/versions/oreo)
 [![Target SDK](https://img.shields.io/badge/Target%20SDK-36%20(Android%2016)-brightgreen?logo=android)](https://developer.android.com/about/versions/16)
 
@@ -76,7 +76,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 | Architecture | **MVVM + StateFlow** | Single source of truth in ViewModel |
 | Timer Engine | **Coroutines** (`viewModelScope`) | Leak-safe; no `CountDownTimer` or `Handler` |
 | Persistence | **DataStore Preferences** | Async, Flow-based; replaces SharedPreferences |
-| DI | **Hilt 2.57.2** | Constructor injection via interfaces |
+| DI | **Hilt 2.59.2** | Constructor injection via interfaces |
 | Audio | **SoundPool** | Low-latency; play requests queued until all sounds loaded |
 | Haptics | **VibrationEffect** | API 26+, one-shot 150ms pulse |
 | Background | **Foreground Service** | `foregroundServiceType="mediaPlayback"` — no sensor permissions required |
@@ -87,7 +87,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 | Coverage | **Kover 0.9.8** | XML + HTML reports |
 | CI | **GitHub Actions** | Python sounds → tests → coverage → APK (path-filtered; skips doc-only commits) |
 
-> **Note on Kotlin versioning:** Kotlin 2.3.x writes class metadata at version 2.3.0, which Hilt 2.57.2's bundled `kotlin-metadata-jvm` does not yet support (max 2.2.0). The project is pinned to **Kotlin 2.2.21 + KSP 2.2.21-2.0.5** until a Hilt release ships with a compatible `kotlin-metadata-jvm`. The upgrade to Kotlin 2.3.x will be done as a coordinated bundle with the next compatible Hilt release.
+> **Note on build toolchain:** The project uses **AGP 9.1.1 + Gradle 9.5.1** with AGP's built-in Kotlin support (default since AGP 9.0). The `org.jetbrains.kotlin.android` plugin is intentionally absent — AGP owns Kotlin compilation. The `org.jetbrains.kotlin.plugin.compose` plugin is still applied explicitly as AGP does not auto-wire the Compose compiler. KSP 2.3.5 uses the new standalone versioning scheme (decoupled from KGP since 2.3.0).
 
 ---
 
@@ -139,6 +139,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 - **SoundPool pending-play queue** — `SoundPool` decodes audio asynchronously after `load()`. Play calls fired before all four sounds are ready are queued in a `ConcurrentLinkedQueue` and drained in `onLoadCompleteListener`, preventing silent dropped beeps on cold start.
 - **No `gradle-wrapper.jar` in version control** — the GitHub Contents API silently corrupts binary files pushed through it. CI bootstraps the JAR by downloading the official Gradle distribution and running `gradle wrapper` on every build.
 - **Compose BOM scoped to all configurations** — `platform(libs.androidx.compose.bom)` is declared for both `implementation` and `debugImplementation` so that debug-only Compose libraries (e.g. `ui-tooling`) resolve their version from the BOM correctly.
+- **AGP 9 built-in Kotlin** — `org.jetbrains.kotlin.android` is not applied; AGP 9.0+ owns Kotlin compilation by default. `org.jetbrains.kotlin.plugin.compose` is still required and applied explicitly.
 
 ---
 
@@ -149,7 +150,9 @@ tabata-clock/
 ├── .github/
 │   └── workflows/
 │       ├── build.yml              # CI: sounds → tests → coverage → APK (path-filtered)
-│       └── release.yml            # Release: signed APK + GitHub Release
+│       ├── codeql.yml             # CodeQL static analysis (push/PR + weekly)
+│       ├── dependency-submission.yml  # Dependency graph → Dependabot
+│       └── release.yml            # Release: signed APK + AAB + GitHub Release
 ├── app/
 │   └── src/
 │       ├── main/
@@ -197,7 +200,7 @@ tabata-clock/
 │   ├── generate_sounds.py         # Generates 4 WAV files (stdlib only)
 │   └── README.md
 ├── gradle/wrapper/
-│   └── gradle-wrapper.properties  # Gradle 8.14.1 — JAR bootstrapped by CI
+│   └── gradle-wrapper.properties  # Gradle 9.5.1 — JAR bootstrapped by CI
 ├── build.gradle.kts
 ├── settings.gradle.kts
 ├── CHANGELOG.md
@@ -214,11 +217,11 @@ tabata-clock/
 
 | Tool | Version |
 |---|---|
-| Android Studio | Ladybug 2024.2+ |
+| Android Studio | Meerkat 2025.1+ |
 | JDK | 17 |
 | Android SDK | 36 |
 | Python | 3.8+ (for sound generation) |
-| Gradle | 8.14.1 (wrapper auto-downloads) |
+| Gradle | 9.5.1 (wrapper auto-downloads) |
 
 ### Clone & Run
 
@@ -231,7 +234,7 @@ python scripts/generate_sounds.py
 
 # 2. Bootstrap the Gradle wrapper JAR (first time only)
 #    Android Studio does this automatically on project sync
-gradle wrapper --gradle-version 8.14.1 --distribution-type bin
+gradle wrapper --gradle-version 9.5.1 --distribution-type bin
 
 # 3. Build & install debug APK
 ./gradlew assembleDebug
@@ -267,7 +270,7 @@ checkout
 generate_sounds.py             # writes 4 WAV files into res/raw/
     │
     ▼
-Bootstrap gradle-wrapper.jar   # downloads Gradle 8.14.1, runs `gradle wrapper`
+Bootstrap gradle-wrapper.jar   # downloads Gradle 9.5.1, runs `gradle wrapper`
     │
     ▼
 ./gradlew test                 # JUnit 5 — 26 tests across 7 suites
@@ -282,18 +285,23 @@ Bootstrap gradle-wrapper.jar   # downloads Gradle 8.14.1, runs `gradle wrapper`
 ### `release.yml` — runs on `v*` tags (e.g. `v1.0.0`)
 
 ```
-checkout → generate sounds → bootstrap wrapper
+checkout → generate sounds → bootstrap wrapper (9.5.1)
     │
     ▼
 ./gradlew assembleRelease      # signed with keystore from GitHub Secrets
+./gradlew bundleRelease        # AAB for Play Store
     │
     ▼
-GitHub Release created         # APK attached as release asset
+GitHub Release created         # APK + AAB attached as release assets
 ```
 
 ### `codeql.yml` — runs on push/PR to `main` and weekly on Saturday
 
 > **Path-filtered** — ignores `*.md`, `*.txt`, `dependabot.yml`, and `scripts/` changes.
+
+### `dependency-submission.yml` — runs on every push to `main`
+
+> Submits the full Gradle dependency graph to GitHub so Dependabot can raise security alerts and version-update PRs.
 
 ### Required GitHub Secrets (for signed builds)
 
@@ -400,7 +408,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. Quick summary:
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Run `python scripts/generate_sounds.py` and `gradle wrapper --gradle-version 8.14.1` once after cloning
+3. Run `python scripts/generate_sounds.py` and `gradle wrapper --gradle-version 9.5.1` once after cloning
 4. Make your changes and add tests
 5. Run `./gradlew test` — all 26 tests must pass
 6. Open a pull request against `main`
