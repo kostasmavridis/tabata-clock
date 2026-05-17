@@ -20,10 +20,11 @@ class FakeSoundManager : ISoundManager {
     val doneCount:         Int get() = _doneCount
     val reinitialiseCount: Int get() = _reinitialiseCount
 
-    override fun playBeep()      { _beepCount++ }
-    override fun playWork()      { _workCount++ }
-    override fun playRest()      { _restCount++ }
-    override fun playDone()      { _doneCount++ }
-    override fun reinitialise()  { _reinitialiseCount++ }
-    override fun release()       { /* no-op */ }
+    override fun playBeep()             { _beepCount++ }
+    override fun playWork()             { _workCount++ }
+    override fun playRest()             { _restCount++ }
+    override fun playDone()             { _doneCount++ }
+    override fun reinitialise()         { _reinitialiseCount++ }
+    override fun reinitialiseIfNeeded() { _reinitialiseCount++ }
+    override fun release()              { /* no-op */ }
 }
