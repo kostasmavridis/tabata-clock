@@ -47,10 +47,13 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 - ⚙️ **Fully configurable** — prepare time, work time, rest time, rounds per set, number of sets
 - 💾 **Persistent settings** — saved with DataStore, survive process death
 - 🔒 **Foreground Service** — timer keeps running when the screen is off, with a live notification showing current phase, time remaining and round
+- 🔔 **Smart notification permission** — `POST_NOTIFICATIONS` is requested at the moment you tap Start (Android 13+), with a snackbar fallback if denied so the timer always runs
 - 🎵 **Synthesised sounds** — all four WAV files auto-generated from Python stdlib (no binary assets in git)
+- 🔄 **Reliable first-beep** — SoundPool play requests are queued if sounds haven't finished loading yet; no silent dropped beeps on cold start
+- 🔙 **Predictive back gesture** — `enableOnBackInvokedCallback` enabled for smooth Android 13+ back animations
 - ✅ **Unit tested** — 26 tests with JUnit 5, Turbine, MockK and `kotlinx-coroutines-test`
 - 📊 **Code coverage** — Kover XML report generated on every CI run
-- 🤖 **GitHub Actions CI** — tests + coverage + debug APK on every push to `main`
+- 🤖 **GitHub Actions CI** — tests + coverage + debug APK on every push to `main` (skipped for doc-only changes)
 
 ---
 
@@ -74,13 +77,15 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 | Timer Engine | **Coroutines** (`viewModelScope`) | Leak-safe; no `CountDownTimer` or `Handler` |
 | Persistence | **DataStore Preferences** | Async, Flow-based; replaces SharedPreferences |
 | DI | **Hilt 2.51** | Constructor injection via interfaces |
-| Audio | **SoundPool** | Low-latency; loaded once at startup |
+| Audio | **SoundPool** | Low-latency; play requests queued until all sounds loaded |
 | Haptics | **VibrationEffect** | API 26+, one-shot 150ms pulse |
-| Background | **Foreground Service** | `foregroundServiceType="health"` |
+| Background | **Foreground Service** | `foregroundServiceType="mediaPlayback"` — no sensor permissions required |
+| Permissions | **POST_NOTIFICATIONS** | Requested on first Start tap (Android 13+); snackbar if denied |
+| Back gesture | **OnBackInvokedCallback** | `enableOnBackInvokedCallback="true"` — predictive back on Android 13+ |
 | Navigation | **Navigation Compose** | `Timer` ↔ `Settings` destinations |
 | Testing | **JUnit 5 + Turbine + MockK** | `StandardTestDispatcher` for virtual time |
 | Coverage | **Kover 0.8** | XML + HTML reports |
-| CI | **GitHub Actions** | Python sounds → tests → coverage → APK |
+| CI | **GitHub Actions** | Python sounds → tests → coverage → APK (path-filtered; skips doc-only commits) |
 
 ---
 
@@ -116,6 +121,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 ┌────────────▼──────────────────────────────────────────────┐
 │              TabataForegroundService                      │
 │  Persistent notification — phase / seconds / round        │
+│  foregroundServiceType="mediaPlayback"                    │
 │  Started by ViewModel on play, stopped on reset/done      │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -127,6 +133,8 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 - **`AndroidViewModel` for service control** — `Application` context is needed to start/stop the `ForegroundService`. `AndroidViewModel` provides it safely without leaking an `Activity`.
 - **`phaseProgress` as a computed property** — derived from `secondsLeft / phaseDurationSecs` inside `TimerState` data class; no extra state field, no risk of drift.
 - **`updateAndGet`** — used in `runPhase()` to atomically update state and capture the new value in one call, avoiding a second `value` read.
+- **`foregroundServiceType="mediaPlayback"`** — `health` type was incorrect; Android 14 enforces that `health` services hold a sensor permission (`ACTIVITY_RECOGNITION`, `BODY_SENSORS`, or `HIGH_SAMPLING_RATE_SENSORS`). A Tabata timer plays audio cues — `mediaPlayback` is semantically correct and requires no sensor permissions.
+- **SoundPool pending-play queue** — `SoundPool` decodes audio asynchronously after `load()`. Play calls fired before all four sounds are ready are queued in a `ConcurrentLinkedQueue` and drained in `onLoadCompleteListener`, preventing silent dropped beeps on cold start.
 - **No `gradle-wrapper.jar` in version control** — the GitHub Contents API silently corrupts binary files pushed through it. CI bootstraps the JAR by downloading the official Gradle distribution and running `gradle wrapper` on every build.
 
 ---
@@ -137,7 +145,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 tabata-clock/
 ├── .github/
 │   └── workflows/
-│       ├── build.yml              # CI: sounds → tests → coverage → APK
+│       ├── build.yml              # CI: sounds → tests → coverage → APK (path-filtered)
 │       └── release.yml            # Release: signed APK + GitHub Release
 ├── app/
 │   └── src/
@@ -145,7 +153,7 @@ tabata-clock/
 │       │   ├── java/com/kostasmavridis/tabataclock/
 │       │   │   ├── audio/
 │       │   │   │   ├── ISoundManager.kt           # Interface
-│       │   │   │   └── SoundManager.kt            # SoundPool + haptics impl
+│       │   │   │   └── SoundManager.kt            # SoundPool + haptics impl (pending-play queue)
 │       │   │   ├── data/
 │       │   │   │   ├── ISettingsRepository.kt     # Interface
 │       │   │   │   └── SettingsRepository.kt      # DataStore impl
@@ -156,13 +164,13 @@ tabata-clock/
 │       │   │   │   └── TabataSettings.kt          # Data class + validated() factory
 │       │   │   ├── service/
 │       │   │   │   ├── ServiceNotifier.kt         # Interface
-│       │   │   │   ├── IntentServiceNotifier.kt   # Production impl (Intent-based)
+│       │   │   │   ├── IntentServiceNotifier.kt   # Production impl (Intent-based, permission-guarded)
 │       │   │   │   ├── NoOpServiceNotifier.kt     # Test/default no-op impl
-│       │   │   │   └── TabataForegroundService.kt # Notification + background timer
+│       │   │   │   └── TabataForegroundService.kt # mediaPlayback foreground service
 │       │   │   ├── ui/
 │       │   │   │   ├── navigation/NavGraph.kt
 │       │   │   │   ├── screen/
-│       │   │   │   │   ├── TimerScreen.kt         # Progress arc + phase colours
+│       │   │   │   │   ├── TimerScreen.kt         # Permission request on Start + snackbar
 │       │   │   │   │   └── SettingsScreen.kt      # Sliders + steppers
 │       │   │   │   └── theme/Theme.kt             # Dark Material 3 + PhaseColors
 │       │   │   ├── viewmodel/
@@ -186,7 +194,7 @@ tabata-clock/
 │   ├── generate_sounds.py         # Generates 4 WAV files (stdlib only)
 │   └── README.md
 ├── gradle/wrapper/
-│   └── gradle-wrapper.properties  # Gradle 8.9 — JAR bootstrapped by CI
+│   └── gradle-wrapper.properties  # Gradle 8.14.1 — JAR bootstrapped by CI
 ├── build.gradle.kts
 ├── settings.gradle.kts
 ├── CONTRIBUTING.md
@@ -206,7 +214,7 @@ tabata-clock/
 | JDK | 17 |
 | Android SDK | 35 |
 | Python | 3.8+ (for sound generation) |
-| Gradle | 8.9 (wrapper auto-downloads) |
+| Gradle | 8.14.1 (wrapper auto-downloads) |
 
 ### Clone & Run
 
@@ -219,7 +227,7 @@ python scripts/generate_sounds.py
 
 # 2. Bootstrap the Gradle wrapper JAR (first time only)
 #    Android Studio does this automatically on project sync
-gradle wrapper --gradle-version 8.9 --distribution-type bin
+gradle wrapper --gradle-version 8.14.1 --distribution-type bin
 
 # 3. Build & install debug APK
 ./gradlew assembleDebug
@@ -246,6 +254,8 @@ start app\build\reports\kover\html\index.html  # Windows
 
 ### `build.yml` — runs on every push to `main` and every PR
 
+> **Path-filtered** — only triggers when files under `app/`, `scripts/`, `gradle/`, build config files, or `build.yml` itself change. Commits that touch only `README.md`, `docs/`, or other workflow files do **not** trigger a build.
+
 ```
 checkout
     │
@@ -253,7 +263,7 @@ checkout
 generate_sounds.py             # writes 4 WAV files into res/raw/
     │
     ▼
-Bootstrap gradle-wrapper.jar   # downloads Gradle 8.9, runs `gradle wrapper`
+Bootstrap gradle-wrapper.jar   # downloads Gradle 8.14.1, runs `gradle wrapper`
     │
     ▼
 ./gradlew test                 # JUnit 5 — 26 tests across 7 suites
@@ -276,6 +286,10 @@ checkout → generate sounds → bootstrap wrapper
     ▼
 GitHub Release created         # APK attached as release asset
 ```
+
+### `codeql.yml` — runs on push/PR to `main` and weekly on Saturday
+
+> **Path-filtered** — ignores `*.md`, `*.txt`, `dependabot.yml`, and `scripts/` changes.
 
 ### Required GitHub Secrets (for signed builds)
 
@@ -382,7 +396,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide. Quick summary:
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Run `python scripts/generate_sounds.py` and `gradle wrapper --gradle-version 8.9` once after cloning
+3. Run `python scripts/generate_sounds.py` and `gradle wrapper --gradle-version 8.14.1` once after cloning
 4. Make your changes and add tests
 5. Run `./gradlew test` — all 26 tests must pass
 6. Open a pull request against `main`
