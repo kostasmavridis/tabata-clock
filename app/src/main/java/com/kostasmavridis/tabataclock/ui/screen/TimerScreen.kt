@@ -1,5 +1,10 @@
 package com.kostasmavridis.tabataclock.ui.screen
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -20,14 +25,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kostasmavridis.tabataclock.model.TabataPhase
 import com.kostasmavridis.tabataclock.ui.theme.PhaseColors
 import com.kostasmavridis.tabataclock.viewmodel.TabataViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun TimerScreen(
@@ -36,6 +44,39 @@ fun TimerScreen(
 ) {
     val state    by viewModel.timerState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val context  = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope    = rememberCoroutineScope()
+
+    // Permission launcher — called when user taps Start and permission is missing.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            viewModel.start()
+        } else {
+            viewModel.start() // Timer still runs; just no background notification.
+            scope.launch {
+                snackbarHostState.showSnackbar(
+                    message     = "Timer running — notifications blocked. " +
+                                  "Enable in Settings to see phase updates when screen is off.",
+                    duration    = SnackbarDuration.Long
+                )
+            }
+        }
+    }
+
+    fun onStartTapped() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.start()
+        }
+    }
 
     val targetTop = when (state.phase) {
         TabataPhase.PREPARE -> PhaseColors.Prepare
@@ -70,171 +111,177 @@ fun TimerScreen(
     )
     val glowAlpha = if (state.isRunning) pulseAlpha else 0f
 
-    Box(
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Color.Transparent,
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(listOf(topColor, botColor))
-            )
-    ) {
-        IconButton(
-            onClick = onNavigateToSettings,
+            .background(brush = Brush.verticalGradient(listOf(topColor, botColor)))
+    ) { padding ->
+        Box(
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            Icon(
-                Icons.Default.Settings,
-                contentDescription = "Settings",
-                tint = Color.White.copy(alpha = 0.8f)
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-
-            Text(
-                text  = state.phase.label.uppercase(),
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    letterSpacing = 6.sp,
-                    fontWeight    = FontWeight.Bold
-                ),
-                color = Color.White.copy(alpha = 0.85f)
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            Box(
+            IconButton(
+                onClick = onNavigateToSettings,
                 modifier = Modifier
-                    .size(260.dp)
-                    .drawWithCache {
-                        val stroke     = 16.dp.toPx()
-                        val glowStroke = 32.dp.toPx()
-                        val inset      = stroke / 2f
-                        val arcSize    = Size(size.width - stroke, size.height - stroke)
-                        val topLeft    = Offset(inset, inset)
-                        onDrawBehind {
-                            drawArc(
-                                color      = Color.White.copy(alpha = glowAlpha),
-                                startAngle = -90f,
-                                sweepAngle = 360f * arcProgress,
-                                useCenter  = false,
-                                topLeft    = topLeft,
-                                size       = arcSize,
-                                style      = Stroke(width = glowStroke, cap = StrokeCap.Round)
-                            )
-                            drawArc(
-                                color      = Color.White.copy(alpha = 0.12f),
-                                startAngle = -90f,
-                                sweepAngle = 360f,
-                                useCenter  = false,
-                                topLeft    = topLeft,
-                                size       = arcSize,
-                                style      = Stroke(width = stroke, cap = StrokeCap.Round)
-                            )
-                            drawArc(
-                                color      = Color.White.copy(alpha = 0.90f),
-                                startAngle = -90f,
-                                sweepAngle = 360f * arcProgress,
-                                useCenter  = false,
-                                topLeft    = topLeft,
-                                size       = arcSize,
-                                style      = Stroke(width = stroke, cap = StrokeCap.Round)
-                            )
-                        }
-                    },
-                contentAlignment = Alignment.Center
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(220.dp)
-                        .clip(CircleShape)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.10f),
-                                    Color.Black.copy(alpha = 0.35f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text       = "%02d".format(state.secondsLeft),
-                        fontSize   = 88.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color      = Color.White
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            RoundPips(
-                total        = settings.rounds,
-                currentRound = state.currentRound,
-                active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            Text(
-                text  = "Round ${state.currentRound} / ${settings.rounds}",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White.copy(alpha = 0.75f)
-            )
-            if (settings.sets > 1) {
-                Text(
-                    text  = "Set ${state.currentSet} / ${settings.sets}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.5f)
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = Color.White.copy(alpha = 0.8f)
                 )
             }
 
-            Spacer(Modifier.height(44.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(28.dp),
-                verticalAlignment     = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(bottom = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                IconButton(
-                    onClick  = { viewModel.reset() },
+
+                Text(
+                    text  = state.phase.label.uppercase(),
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        letterSpacing = 6.sp,
+                        fontWeight    = FontWeight.Bold
+                    ),
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Box(
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f))
+                        .size(260.dp)
+                        .drawWithCache {
+                            val stroke     = 16.dp.toPx()
+                            val glowStroke = 32.dp.toPx()
+                            val inset      = stroke / 2f
+                            val arcSize    = Size(size.width - stroke, size.height - stroke)
+                            val topLeft    = Offset(inset, inset)
+                            onDrawBehind {
+                                drawArc(
+                                    color      = Color.White.copy(alpha = glowAlpha),
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * arcProgress,
+                                    useCenter  = false,
+                                    topLeft    = topLeft,
+                                    size       = arcSize,
+                                    style      = Stroke(width = glowStroke, cap = StrokeCap.Round)
+                                )
+                                drawArc(
+                                    color      = Color.White.copy(alpha = 0.12f),
+                                    startAngle = -90f,
+                                    sweepAngle = 360f,
+                                    useCenter  = false,
+                                    topLeft    = topLeft,
+                                    size       = arcSize,
+                                    style      = Stroke(width = stroke, cap = StrokeCap.Round)
+                                )
+                                drawArc(
+                                    color      = Color.White.copy(alpha = 0.90f),
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * arcProgress,
+                                    useCenter  = false,
+                                    topLeft    = topLeft,
+                                    size       = arcSize,
+                                    style      = Stroke(width = stroke, cap = StrokeCap.Round)
+                                )
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector        = Icons.Default.Refresh,
-                        contentDescription = "Reset",
-                        tint               = Color.White,
-                        modifier           = Modifier.size(26.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(220.dp)
+                            .clip(CircleShape)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.10f),
+                                        Color.Black.copy(alpha = 0.35f)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text       = "%02d".format(state.secondsLeft),
+                            fontSize   = 88.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color      = Color.White
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                RoundPips(
+                    total        = settings.rounds,
+                    currentRound = state.currentRound,
+                    active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                Text(
+                    text  = "Round ${state.currentRound} / ${settings.rounds}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White.copy(alpha = 0.75f)
+                )
+                if (settings.sets > 1) {
+                    Text(
+                        text  = "Set ${state.currentSet} / ${settings.sets}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.5f)
                     )
                 }
 
-                FloatingActionButton(
-                    onClick = {
-                        when {
-                            state.isRunning -> viewModel.pause()
-                            state.isPaused  -> viewModel.resume()
-                            else            -> viewModel.start()
-                        }
-                    },
-                    modifier       = Modifier.size(80.dp),
-                    shape          = CircleShape,
-                    containerColor = Color.White,
-                    elevation      = FloatingActionButtonDefaults.elevation(8.dp, 12.dp)
+                Spacer(Modifier.height(44.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(28.dp),
+                    verticalAlignment     = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector        = if (state.isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (state.isRunning) "Pause" else "Play",
-                        tint               = topColor,
-                        modifier           = Modifier.size(42.dp)
-                    )
+                    IconButton(
+                        onClick  = { viewModel.reset() },
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.12f))
+                    ) {
+                        Icon(
+                            imageVector        = Icons.Default.Refresh,
+                            contentDescription = "Reset",
+                            tint               = Color.White,
+                            modifier           = Modifier.size(26.dp)
+                        )
+                    }
+
+                    FloatingActionButton(
+                        onClick = {
+                            when {
+                                state.isRunning -> viewModel.pause()
+                                state.isPaused  -> viewModel.resume()
+                                else            -> onStartTapped()
+                            }
+                        },
+                        modifier       = Modifier.size(80.dp),
+                        shape          = CircleShape,
+                        containerColor = Color.White,
+                        elevation      = FloatingActionButtonDefaults.elevation(8.dp, 12.dp)
+                    ) {
+                        Icon(
+                            imageVector        = if (state.isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (state.isRunning) "Pause" else "Play",
+                            tint               = topColor,
+                            modifier           = Modifier.size(42.dp)
+                        )
+                    }
                 }
             }
         }

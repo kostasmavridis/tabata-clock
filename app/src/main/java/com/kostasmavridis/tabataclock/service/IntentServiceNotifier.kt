@@ -16,8 +16,9 @@ import javax.inject.Inject
  *
  * On Android 13+ (TIRAMISU) we must hold POST_NOTIFICATIONS before starting a
  * foreground service that posts a notification. If the permission has not been
- * granted we still allow the timer to run — the service just won't be started,
- * so there will be no persistent notification while the screen is off.
+ * granted the timer still runs — the service just won't start, so there will be
+ * no persistent notification while the screen is off. The UI layer (TimerScreen)
+ * is responsible for prompting the user and showing a snackbar if denied.
  */
 class IntentServiceNotifier @Inject constructor(
     private val application: Application
