@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
     primary      = Color(0xFFFF4D6D),
-    secondary    = Color(0xFF00D4FF),
+    secondary    = Color(0xFF00C896),
     background   = Color(0xFF06060F),
     surface      = Color(0xFF111827),
     onPrimary    = Color.White,
@@ -25,23 +25,21 @@ fun TabataClockTheme(content: @Composable () -> Unit) {
 }
 
 /**
- * Phase background gradient colours — kept in sync with the web dashboard
- * CSS variables in web/index.html:
- *   --work-a/#FF4D6D  --work-b/#FF8C69
- *   --rest-a/#00D4FF  --rest-b/#7B61FF
- *   --prep-a/#4169E1  --prep-b/#00CFFD
- *   --done-a/#9B59B6  --done-b/#6C3483
+ * Phase background gradient colours — kept in sync with the web dashboard.
  *
- * *Top* is the vivid accent; *Dark* is the deep background end of the gradient.
+ * Rest is deep emerald (#00C896) rather than cyan (#00D4FF):
+ *   - cyan read as "cold/icy" rather than "recovery"
+ *   - emerald contrasts clearly with Work coral and Prepare blue
+ *   - still vivid enough to glow well against the #06060F background
  */
 object PhaseColors {
     // Work — coral
     val Work        = Color(0xFFFF4D6D)
     val WorkDark    = Color(0xFF1A0010)
 
-    // Rest — cyan / violet
-    val Rest        = Color(0xFF00D4FF)
-    val RestDark    = Color(0xFF06001A)
+    // Rest — deep emerald (was cyan #00D4FF)
+    val Rest        = Color(0xFF00C896)
+    val RestDark    = Color(0xFF001A0F)
 
     // Prepare — royal blue
     val Prepare     = Color(0xFF4169E1)

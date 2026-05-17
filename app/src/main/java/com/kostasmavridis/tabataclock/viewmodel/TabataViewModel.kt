@@ -31,7 +31,7 @@ class TabataViewModel @Inject constructor(
     private val serviceNotifier: ServiceNotifier = NoOpServiceNotifier()
 ) : AndroidViewModel(application) {
 
-    // ── Settings ─────────────────────────────────────────────────────────
+    // ── Settings ───────────────────────────────────────────────────────
     val settings: StateFlow<TabataSettings> = repo.settingsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, repo.settingsFlow.value)
 
@@ -39,7 +39,7 @@ class TabataViewModel @Inject constructor(
         viewModelScope.launch { repo.saveSettings(s) }
     }
 
-    // ── Timer State ───────────────────────────────────────────────────────
+    // ── Timer State ──────────────────────────────────────────────────────
     data class TimerState(
         val phase: TabataPhase = TabataPhase.PREPARE,
         val secondsLeft: Int = 0,
@@ -48,13 +48,8 @@ class TabataViewModel @Inject constructor(
         val currentSet: Int = 1,
         val isRunning: Boolean = false,
         val isPaused: Boolean = false,
-        /**
-         * Number of WORK rounds fully completed across all sets so far.
-         * Used by the "Total X/Y" meta chip in the UI.
-         */
         val totalRoundsCompleted: Int = 0
     ) {
-        /** 0.0 (phase start) → 1.0 (phase end) */
         val phaseProgress: Float
             get() = if (phaseDurationSecs <= 0) 1f
                     else 1f - (secondsLeft.toFloat() / phaseDurationSecs.toFloat())
@@ -69,18 +64,31 @@ class TabataViewModel @Inject constructor(
     val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
 
     private var timerJob: Job? = null
-
-    // Tracks whether skip() was called so runPhase can exit early.
     @Volatile private var skipRequested = false
 
-    // ── Lifecycle callbacks ───────────────────────────────────────────────
+    // ── Lifecycle callbacks ──────────────────────────────────────────────
+
+    /**
+     * Called when the app returns to the foreground while NOT running.
+     * Rebuilds the SoundPool so OEM-silenced AudioTrack sessions are
+     * transparently restored before the next start().
+     */
     fun onAppForegrounded() {
         if (!_timerState.value.isRunning) {
             soundManager.reinitialise()
         }
     }
 
-    // ── Controls ─────────────────────────────────────────────────────────
+    /**
+     * Called every time TimerScreen re-enters the Resumed lifecycle state
+     * — covers both app-foreground and back-navigation from SettingsScreen.
+     * Uses reinitialiseIfNeeded() which is safe to call mid-run.
+     */
+    fun onScreenResumed() {
+        soundManager.reinitialiseIfNeeded()
+    }
+
+    // ── Controls ────────────────────────────────────────────────────────
     fun start() {
         if (_timerState.value.isRunning) return
         _timerState.update { it.copy(isRunning = true, isPaused = false) }
@@ -114,10 +122,6 @@ class TabataViewModel @Inject constructor(
         )
     }
 
-    /**
-     * Immediately ends the current phase and advances to the next one.
-     * No-op when not running or already on DONE.
-     */
     fun skip() {
         if (!_timerState.value.isRunning) return
         if (_timerState.value.phase == TabataPhase.DONE) return
@@ -133,8 +137,6 @@ class TabataViewModel @Inject constructor(
                 _timerState.update { it.copy(currentRound = round, currentSet = set) }
                 soundManager.playWork()
                 runPhase(TabataPhase.WORK, s.workSecs, s.workSecs)
-                // Increment completed count after each WORK phase finishes
-                // (whether it finished naturally or via skip).
                 _timerState.update {
                     it.copy(totalRoundsCompleted = it.totalRoundsCompleted + 1)
                 }

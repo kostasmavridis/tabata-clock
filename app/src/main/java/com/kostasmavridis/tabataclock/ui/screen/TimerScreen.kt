@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kostasmavridis.tabataclock.model.TabataPhase
 import com.kostasmavridis.tabataclock.model.accentColor
@@ -46,9 +47,6 @@ import com.kostasmavridis.tabataclock.model.gradientColors
 import com.kostasmavridis.tabataclock.viewmodel.TabataViewModel
 import kotlinx.coroutines.launch
 
-// ---------------------------------------------------------------------------
-// Background base colour — matches web body background
-// ---------------------------------------------------------------------------
 private val BgBase = Color(0xFF06060F)
 
 @Composable
@@ -63,6 +61,13 @@ fun TimerScreen(
     val scope    = rememberCoroutineScope()
     val isLandscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // Reinitialise SoundPool every time this screen re-enters Resumed state.
+    // Covers both app-foreground and back-navigation from SettingsScreen.
+    LifecycleResumeEffect(Unit) {
+        viewModel.onScreenResumed()
+        onPauseOrDispose { /* nothing to clean up */ }
+    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -92,41 +97,33 @@ fun TimerScreen(
         }
     }
 
-    // Accent colour — animated on phase change
     val accent by animateColorAsState(
         targetValue   = state.phase.accentColor(),
         animationSpec = tween(500),
         label         = "accent"
     )
-
-    // Blob colours from the phase gradient (top = vivid, bottom = dark)
     val (blobVivid, _) = state.phase.gradientColors()
     val blobColor by animateColorAsState(
         targetValue   = blobVivid,
         animationSpec = tween(600),
         label         = "blob"
     )
-
     val arcProgress by animateFloatAsState(
         targetValue   = state.phaseProgress,
         animationSpec = tween(900, easing = LinearEasing),
         label         = "arc"
     )
-
-    // Pulsing glow alpha — only when running
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by pulseAnim.animateFloat(
         initialValue  = 0.25f,
         targetValue   = 0.60f,
         animationSpec = infiniteRepeatable(
-            tween(900, easing = FastOutSlowInEasing),
-            RepeatMode.Reverse
+            tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse
         ),
         label = "pulseAlpha"
     )
     val glowAlpha = if (state.isRunning) pulseAlpha else 0.25f
 
-    // Phase-flash overlay
     var flashAlpha by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(state.phase) { flashAlpha = 0.55f }
     val animatedFlash by animateFloatAsState(
@@ -148,73 +145,30 @@ fun TimerScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // ── Dual radial blob background ───────────────────────────
-            // Blob 1: top-left, large, vivid phase colour at low alpha.
-            // Blob 2: bottom-right, secondary colour (accent secondary).
-            // Together they reproduce the web ::before/::after blob mesh.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawBehind {
-                        // Top-left blob
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    blobColor.copy(alpha = 0.28f),
-                                    Color.Transparent
-                                ),
-                                center = Offset(size.width * 0.15f, size.height * 0.20f),
-                                radius = size.width * 0.70f
-                            ),
-                            center = Offset(size.width * 0.15f, size.height * 0.20f),
-                            radius = size.width * 0.70f
-                        )
-                        // Bottom-right blob
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    blobColor.copy(alpha = 0.18f),
-                                    Color.Transparent
-                                ),
-                                center = Offset(size.width * 0.88f, size.height * 0.82f),
-                                radius = size.width * 0.55f
-                            ),
-                            center = Offset(size.width * 0.88f, size.height * 0.82f),
-                            radius = size.width * 0.55f
-                        )
-                    }
-            )
+            BlobBackground(blobColor = blobColor)
 
-            // ── Main content ─────────────────────────────────────────
             if (isLandscape) {
                 TimerContentLandscape(
-                    state         = state,
-                    settings      = settings,
-                    accent        = accent,
-                    arcProgress   = arcProgress,
-                    glowAlpha     = glowAlpha,
+                    state = state, settings = settings, accent = accent,
+                    arcProgress = arcProgress, glowAlpha = glowAlpha,
                     onStartTapped = ::onStartTapped,
-                    onPause       = { viewModel.pause() },
-                    onResume      = { viewModel.resume() },
-                    onReset       = { viewModel.reset() },
-                    onSkip        = { viewModel.skip() }
+                    onPause  = { viewModel.pause() },
+                    onResume = { viewModel.resume() },
+                    onReset  = { viewModel.reset() },
+                    onSkip   = { viewModel.skip() }
                 )
             } else {
                 TimerContentPortrait(
-                    state         = state,
-                    settings      = settings,
-                    accent        = accent,
-                    arcProgress   = arcProgress,
-                    glowAlpha     = glowAlpha,
+                    state = state, settings = settings, accent = accent,
+                    arcProgress = arcProgress, glowAlpha = glowAlpha,
                     onStartTapped = ::onStartTapped,
-                    onPause       = { viewModel.pause() },
-                    onResume      = { viewModel.resume() },
-                    onReset       = { viewModel.reset() },
-                    onSkip        = { viewModel.skip() }
+                    onPause  = { viewModel.pause() },
+                    onResume = { viewModel.resume() },
+                    onReset  = { viewModel.reset() },
+                    onSkip   = { viewModel.skip() }
                 )
             }
 
-            // ── Phase flash overlay ───────────────────────────────────
             if (animatedFlash > 0f) {
                 Box(
                     modifier = Modifier
@@ -230,25 +184,55 @@ fun TimerScreen(
                 )
             }
 
-            // ── Done overlay ─────────────────────────────────────────
             if (state.phase == TabataPhase.DONE) {
-                DoneOverlay(
-                    settings  = settings,
-                    onRestart = { viewModel.reset() }
-                )
+                DoneOverlay(settings = settings, onRestart = { viewModel.reset() })
             }
 
-            // ── Top bar: logo left, settings pill right ───────────────
             TopBar(
-                accent             = accent,
+                accent               = accent,
                 onNavigateToSettings = onNavigateToSettings,
-                modifier           = Modifier
+                modifier             = Modifier
                     .align(Alignment.TopStart)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 14.dp)
             )
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Blob background — extracted so SettingsScreen can reuse it
+// ---------------------------------------------------------------------------
+
+@Composable
+internal fun BlobBackground(
+    blobColor : Color,
+    modifier  : Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .drawBehind {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(blobColor.copy(alpha = 0.28f), Color.Transparent),
+                        center = Offset(size.width * 0.15f, size.height * 0.20f),
+                        radius = size.width * 0.70f
+                    ),
+                    center = Offset(size.width * 0.15f, size.height * 0.20f),
+                    radius = size.width * 0.70f
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(blobColor.copy(alpha = 0.18f), Color.Transparent),
+                        center = Offset(size.width * 0.88f, size.height * 0.82f),
+                        radius = size.width * 0.55f
+                    ),
+                    center = Offset(size.width * 0.88f, size.height * 0.82f),
+                    radius = size.width * 0.55f
+                )
+            }
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -266,41 +250,31 @@ private fun TopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment     = Alignment.CenterVertically
     ) {
-        // Logo — "TABATA" white, "CLOCK" accent — matches web header
         Row {
             Text(
-                text       = "TABATA",
-                fontWeight = FontWeight.ExtraBold,
-                fontSize   = 18.sp,
+                text          = "TABATA",
+                fontWeight    = FontWeight.ExtraBold,
+                fontSize      = 18.sp,
                 letterSpacing = 2.sp,
-                color      = Color.White
+                color         = Color.White
             )
             Text(
-                text       = "CLOCK",
-                fontWeight = FontWeight.ExtraBold,
-                fontSize   = 18.sp,
+                text          = "CLOCK",
+                fontWeight    = FontWeight.ExtraBold,
+                fontSize      = 18.sp,
                 letterSpacing = 2.sp,
-                color      = accent
+                color         = accent
             )
         }
-
-        // Settings pill badge — matches web .btn-settings
         TextButton(
-            onClick = onNavigateToSettings,
-            shape   = RoundedCornerShape(50),
-            colors  = ButtonDefaults.textButtonColors(
+            onClick  = onNavigateToSettings,
+            shape    = RoundedCornerShape(50),
+            colors   = ButtonDefaults.textButtonColors(
                 contentColor = Color.White.copy(alpha = 0.75f)
             ),
             modifier = Modifier
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.20f),
-                    shape = RoundedCornerShape(50)
-                )
-                .background(
-                    color = Color.White.copy(alpha = 0.06f),
-                    shape = RoundedCornerShape(50)
-                )
+                .border(1.dp, Color.White.copy(alpha = 0.20f), RoundedCornerShape(50))
+                .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(50))
         ) {
             Icon(
                 Icons.Default.Settings,
@@ -310,9 +284,9 @@ private fun TopBar(
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text      = "SETTINGS",
-                fontSize  = 11.sp,
-                fontWeight = FontWeight.SemiBold,
+                text          = "SETTINGS",
+                fontSize      = 11.sp,
+                fontWeight    = FontWeight.SemiBold,
                 letterSpacing = 1.5.sp
             )
         }
@@ -332,7 +306,6 @@ private fun DoneOverlay(
     val minutes = totalWorkSecs / 60
     val seconds = totalWorkSecs % 60
     val accent  = TabataPhase.DONE.accentColor()
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -350,17 +323,16 @@ private fun DoneOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(text = "\uD83D\uDD25", fontSize = 64.sp)
+            Text("\uD83D\uDD25", fontSize = 64.sp)
             Text(
-                text  = "Session Complete",
+                "Session Complete",
                 style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight    = FontWeight.ExtraBold,
-                    letterSpacing = (-0.5).sp
+                    fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp
                 ),
                 color = accent
             )
             Text(
-                text  = "${settings.rounds * settings.sets} rounds · ${minutes}m ${seconds}s work",
+                "${settings.rounds * settings.sets} rounds · ${minutes}m ${seconds}s work",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White.copy(alpha = 0.6f)
             )
@@ -369,16 +341,13 @@ private fun DoneOverlay(
                 onClick  = onRestart,
                 shape    = CircleShape,
                 colors   = ButtonDefaults.buttonColors(
-                    containerColor = accent,
-                    contentColor   = Color.White
+                    containerColor = accent, contentColor = Color.White
                 ),
                 modifier = Modifier.padding(horizontal = 32.dp)
             ) {
                 Text(
-                    text       = "Start Again",
-                    fontWeight = FontWeight.Bold,
-                    fontSize   = 16.sp,
-                    modifier   = Modifier.padding(vertical = 6.dp, horizontal = 16.dp)
+                    "Start Again", fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                    modifier = Modifier.padding(vertical = 6.dp, horizontal = 16.dp)
                 )
             }
         }
@@ -405,13 +374,10 @@ private fun TimerContentPortrait(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // 68dp top: logo bar height (≈48dp touch) + 20dp gap
             .padding(
                 top    = 68.dp,
                 bottom = WindowInsets.navigationBars
-                    .asPaddingValues()
-                    .calculateBottomPadding()
-                    .coerceAtLeast(16.dp)
+                    .asPaddingValues().calculateBottomPadding().coerceAtLeast(16.dp)
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -422,38 +388,23 @@ private fun TimerContentPortrait(
             PhaseLabel(phase = state.phase, accent = accent)
             Spacer(Modifier.height(16.dp))
             TimerArc(
-                arcSize     = 260.dp,
-                digitSize   = 88,
-                arcProgress = arcProgress,
-                glowAlpha   = glowAlpha,
-                accent      = accent,
-                secondsLeft = state.secondsLeft,
-                phase       = state.phase
+                arcSize = 260.dp, digitSize = 88,
+                arcProgress = arcProgress, glowAlpha = glowAlpha,
+                accent = accent, secondsLeft = state.secondsLeft, phase = state.phase
             )
             Spacer(Modifier.height(24.dp))
             RoundPips(
-                total        = settings.rounds,
-                currentRound = state.currentRound,
-                accent       = accent,
-                active       = state.phase != TabataPhase.PREPARE &&
-                               state.phase != TabataPhase.DONE
+                total = settings.rounds, currentRound = state.currentRound,
+                accent = accent,
+                active = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
             )
             Spacer(Modifier.height(16.dp))
-            MetaChips(
-                state    = state,
-                settings = settings,
-                accent   = accent
-            )
+            MetaChips(state = state, settings = settings, accent = accent)
             Spacer(Modifier.height(40.dp))
             TimerControls(
-                isRunning     = state.isRunning,
-                isPaused      = state.isPaused,
-                accent        = accent,
-                onStartTapped = onStartTapped,
-                onPause       = onPause,
-                onResume      = onResume,
-                onReset       = onReset,
-                onSkip        = onSkip
+                isRunning = state.isRunning, isPaused = state.isPaused, accent = accent,
+                onStartTapped = onStartTapped, onPause = onPause,
+                onResume = onResume, onReset = onReset, onSkip = onSkip
             )
         }
     }
@@ -477,56 +428,38 @@ private fun TimerContentLandscape(
     onSkip       : () -> Unit
 ) {
     Row(
-        modifier              = Modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment     = Alignment.CenterVertically
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier         = Modifier.weight(1f)
-        ) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             TimerArc(
-                arcSize     = 200.dp,
-                digitSize   = 64,
-                arcProgress = arcProgress,
-                glowAlpha   = glowAlpha,
-                accent      = accent,
-                secondsLeft = state.secondsLeft,
-                phase       = state.phase
+                arcSize = 200.dp, digitSize = 64,
+                arcProgress = arcProgress, glowAlpha = glowAlpha,
+                accent = accent, secondsLeft = state.secondsLeft, phase = state.phase
             )
         }
         Column(
-            modifier            = Modifier.weight(1f),
+            modifier = Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             PhaseLabel(phase = state.phase, accent = accent)
             Spacer(Modifier.height(12.dp))
             RoundPips(
-                total        = settings.rounds,
-                currentRound = state.currentRound,
-                accent       = accent,
-                active       = state.phase != TabataPhase.PREPARE &&
-                               state.phase != TabataPhase.DONE
+                total = settings.rounds, currentRound = state.currentRound,
+                accent = accent,
+                active = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
             )
             Spacer(Modifier.height(10.dp))
-            MetaChips(
-                state    = state,
-                settings = settings,
-                accent   = accent
-            )
+            MetaChips(state = state, settings = settings, accent = accent)
             Spacer(Modifier.height(24.dp))
             TimerControls(
-                isRunning     = state.isRunning,
-                isPaused      = state.isPaused,
-                accent        = accent,
-                onStartTapped = onStartTapped,
-                onPause       = onPause,
-                onResume      = onResume,
-                onReset       = onReset,
-                onSkip        = onSkip
+                isRunning = state.isRunning, isPaused = state.isPaused, accent = accent,
+                onStartTapped = onStartTapped, onPause = onPause,
+                onResume = onResume, onReset = onReset, onSkip = onSkip
             )
         }
     }
@@ -541,10 +474,8 @@ private fun PhaseLabel(phase: TabataPhase, accent: Color) {
     Text(
         text  = phase.label.uppercase(),
         style = MaterialTheme.typography.headlineSmall.copy(
-            letterSpacing = 6.sp,
-            fontWeight    = FontWeight.Bold
+            letterSpacing = 6.sp, fontWeight = FontWeight.Bold
         ),
-        // Use accent colour directly — matches web #phase-label colour rule
         color = accent
     )
 }
@@ -565,52 +496,39 @@ private fun TimerArc(
             .size(arcSize)
             .drawWithCache {
                 val stroke     = 14.dp.toPx()
-                val glowStroke = 48.dp.toPx()   // wide glow — matches web filter:blur
+                val glowStroke = 48.dp.toPx()
                 val inset      = stroke / 2f
                 val arcSz      = Size(size.width - stroke, size.height - stroke)
                 val topLeft    = Offset(inset, inset)
                 onDrawBehind {
-                    // Dim full-circle track
                     drawArc(
-                        color      = Color.White.copy(alpha = 0.07f),
-                        startAngle = -90f,
-                        sweepAngle = 360f,
-                        useCenter  = false,
-                        topLeft    = topLeft,
-                        size       = arcSz,
-                        style      = Stroke(width = stroke, cap = StrokeCap.Round)
+                        color = Color.White.copy(alpha = 0.07f),
+                        startAngle = -90f, sweepAngle = 360f, useCenter = false,
+                        topLeft = topLeft, size = arcSz,
+                        style = Stroke(width = stroke, cap = StrokeCap.Round)
                     )
-                    // Wide glow arc — accent colour, pulsing
                     drawArc(
-                        color      = accent.copy(alpha = glowAlpha * 0.55f),
-                        startAngle = -90f,
-                        sweepAngle = 360f * arcProgress,
-                        useCenter  = false,
-                        topLeft    = topLeft,
-                        size       = arcSz,
-                        style      = Stroke(width = glowStroke, cap = StrokeCap.Round)
+                        color = accent.copy(alpha = glowAlpha * 0.55f),
+                        startAngle = -90f, sweepAngle = 360f * arcProgress, useCenter = false,
+                        topLeft = topLeft, size = arcSz,
+                        style = Stroke(width = glowStroke, cap = StrokeCap.Round)
                     )
-                    // Progress arc — accent colour (not white), crisp
                     drawArc(
-                        color      = accent,
-                        startAngle = -90f,
-                        sweepAngle = 360f * arcProgress,
-                        useCenter  = false,
-                        topLeft    = topLeft,
-                        size       = arcSz,
-                        style      = Stroke(width = stroke, cap = StrokeCap.Round)
+                        color = accent,
+                        startAngle = -90f, sweepAngle = 360f * arcProgress, useCenter = false,
+                        topLeft = topLeft, size = arcSz,
+                        style = Stroke(width = stroke, cap = StrokeCap.Round)
                     )
                 }
             },
         contentAlignment = Alignment.Center
     ) {
-        // Inner circle: very subtle frosted glass fill
         Box(
             modifier = Modifier
                 .size(innerSize)
                 .clip(CircleShape)
                 .background(
-                    brush = Brush.radialGradient(
+                    Brush.radialGradient(
                         colors = listOf(
                             Color.White.copy(alpha = 0.06f),
                             Color.Black.copy(alpha = 0.30f)
@@ -624,19 +542,17 @@ private fun TimerArc(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text       = "%02d".format(secondsLeft),
-                    fontSize   = digitSize.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color      = Color.White
+                    "%02d".format(secondsLeft),
+                    fontSize = digitSize.sp, fontWeight = FontWeight.ExtraBold,
+                    color = Color.White
                 )
-                // Sub-label inside ring — matches web .timer-sub-label
                 if (phase != TabataPhase.DONE) {
                     Text(
-                        text      = phase.label.uppercase(),
-                        fontSize  = (digitSize * 0.17f).sp,
+                        phase.label.uppercase(),
+                        fontSize = (digitSize * 0.17f).sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 3.sp,
-                        color     = Color.White.copy(alpha = 0.55f),
+                        color = Color.White.copy(alpha = 0.55f),
                         textAlign = TextAlign.Center
                     )
                 }
@@ -645,10 +561,6 @@ private fun TimerArc(
     }
 }
 
-/**
- * Glassmorphism pill chips row — "Round X/Y", "Set X/Y", "Total X/Y".
- * Matches the web .meta-chip elements with frosted border + bg.
- */
 @Composable
 private fun MetaChips(
     state    : TabataViewModel.TimerState,
@@ -660,58 +572,24 @@ private fun MetaChips(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment     = Alignment.CenterVertically
     ) {
-        MetaChip(label = "Round", value = state.currentRound, total = settings.rounds, accent = accent)
-        if (settings.sets > 1) {
-            MetaChip(label = "Set", value = state.currentSet, total = settings.sets, accent = accent)
-        }
-        MetaChip(
-            label  = "Total",
-            value  = state.totalRoundsCompleted,
-            total  = totalRounds,
-            accent = accent
-        )
+        MetaChip("Round", state.currentRound, settings.rounds, accent)
+        if (settings.sets > 1) MetaChip("Set", state.currentSet, settings.sets, accent)
+        MetaChip("Total", state.totalRoundsCompleted, totalRounds, accent)
     }
 }
 
 @Composable
-private fun MetaChip(
-    label  : String,
-    value  : Int,
-    total  : Int,
-    accent : Color
-) {
+private fun MetaChip(label: String, value: Int, total: Int, accent: Color) {
     Box(
         modifier = Modifier
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(50)
-            )
-            .background(
-                color = Color.White.copy(alpha = 0.07f),
-                shape = RoundedCornerShape(50)
-            )
+            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
+            .background(Color.White.copy(alpha = 0.07f), RoundedCornerShape(50))
             .padding(horizontal = 14.dp, vertical = 7.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text      = "$label ",
-                fontSize  = 13.sp,
-                color     = Color.White.copy(alpha = 0.55f),
-                fontWeight = FontWeight.Normal
-            )
-            Text(
-                text      = "$value",
-                fontSize  = 13.sp,
-                color     = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text      = "/$total",
-                fontSize  = 13.sp,
-                color     = Color.White.copy(alpha = 0.40f),
-                fontWeight = FontWeight.Normal
-            )
+            Text("$label ", fontSize = 13.sp, color = Color.White.copy(alpha = 0.55f))
+            Text("$value",  fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
+            Text("/$total", fontSize = 13.sp, color = Color.White.copy(alpha = 0.40f))
         }
     }
 }
@@ -731,14 +609,8 @@ private fun TimerControls(
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         verticalAlignment     = Alignment.CenterVertically
     ) {
-        // Reset button — small ghost circle
-        SmallControlButton(
-            onClick            = onReset,
-            contentDescription = "Reset",
-            icon               = Icons.Default.Refresh
-        )
+        SmallControlButton(onReset, "Reset", Icons.Default.Refresh)
 
-        // FAB — phase-accent gradient fill + coloured outer glow shadow
         FloatingActionButton(
             onClick = {
                 when {
@@ -749,25 +621,16 @@ private fun TimerControls(
             },
             modifier = Modifier
                 .size(80.dp)
-                // Coloured glow shadow: two progressively dimmer circles
-                // behind the button, matching web box-shadow on .btn-play
                 .drawBehind {
                     val r = size.minDimension / 2f
-                    drawCircle(
-                        color  = accent.copy(alpha = 0.35f),
-                        radius = r + 18.dp.toPx()
-                    )
-                    drawCircle(
-                        color  = accent.copy(alpha = 0.18f),
-                        radius = r + 30.dp.toPx()
-                    )
+                    drawCircle(color = accent.copy(alpha = 0.35f), radius = r + 18.dp.toPx())
+                    drawCircle(color = accent.copy(alpha = 0.18f), radius = r + 30.dp.toPx())
                 }
                 .drawWithCache {
                     onDrawBehind {
-                        // Gradient fill: vivid accent → darker shade
                         drawCircle(
                             brush = Brush.linearGradient(
-                                colors  = listOf(
+                                colors = listOf(
                                     accent,
                                     accent.copy(
                                         red   = (accent.red   * 0.65f).coerceIn(0f, 1f),
@@ -786,20 +649,13 @@ private fun TimerControls(
             elevation      = FloatingActionButtonDefaults.elevation(0.dp, 0.dp)
         ) {
             Icon(
-                imageVector        = if (isRunning) Icons.Default.Pause
-                                     else Icons.Default.PlayArrow,
+                if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = if (isRunning) "Pause" else "Play",
-                tint               = Color.White,
-                modifier           = Modifier.size(42.dp)
+                tint = Color.White, modifier = Modifier.size(42.dp)
             )
         }
 
-        // Skip button — small ghost circle, matches web ⏭ button
-        SmallControlButton(
-            onClick            = onSkip,
-            contentDescription = "Skip",
-            icon               = Icons.Default.SkipNext
-        )
+        SmallControlButton(onSkip, "Skip", Icons.Default.SkipNext)
     }
 }
 
@@ -813,21 +669,12 @@ private fun SmallControlButton(
         onClick  = onClick,
         modifier = Modifier
             .size(52.dp)
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.18f),
-                shape = CircleShape
-            )
-            .background(
-                color = Color.White.copy(alpha = 0.08f),
-                shape = CircleShape
-            )
+            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+            .background(Color.White.copy(alpha = 0.08f), CircleShape)
     ) {
         Icon(
-            imageVector        = icon,
-            contentDescription = contentDescription,
-            tint               = Color.White.copy(alpha = 0.80f),
-            modifier           = Modifier.size(24.dp)
+            icon, contentDescription = contentDescription,
+            tint = Color.White.copy(alpha = 0.80f), modifier = Modifier.size(24.dp)
         )
     }
 }
@@ -844,7 +691,6 @@ private fun RoundPips(
     val displayCount = if (showOverflow) maxVisible else total
     val baseDotSize  = if (total <= 12) 10.dp else 7.dp
     val dotSpacing   = if (total <= 12) 6.dp  else 4.dp
-
     Row(
         horizontalArrangement = Arrangement.spacedBy(dotSpacing),
         verticalAlignment     = Alignment.CenterVertically
@@ -852,29 +698,19 @@ private fun RoundPips(
         for (i in 1..displayCount) {
             val isDone    = active && i < currentRound
             val isCurrent = active && i == currentRound
-
-            // Scale animation: current pip grows to 1.45× (matches web pip CSS transform)
             val scale by animateFloatAsState(
                 targetValue   = if (isCurrent) 1.45f else 1.0f,
                 animationSpec = tween(300, easing = FastOutSlowInEasing),
                 label         = "pipScale$i"
             )
             val dotSize = baseDotSize * scale
-
             Box(
                 modifier = Modifier
                     .size(dotSize)
-                    // Accent glow behind the current pip — matches web .pip.current box-shadow
                     .then(
                         if (isCurrent) Modifier.drawBehind {
-                            drawCircle(
-                                color  = accent.copy(alpha = 0.55f),
-                                radius = size.minDimension / 2f + 6.dp.toPx()
-                            )
-                            drawCircle(
-                                color  = accent.copy(alpha = 0.25f),
-                                radius = size.minDimension / 2f + 12.dp.toPx()
-                            )
+                            drawCircle(accent.copy(alpha = 0.55f), size.minDimension / 2f + 6.dp.toPx())
+                            drawCircle(accent.copy(alpha = 0.25f), size.minDimension / 2f + 12.dp.toPx())
                         } else Modifier
                     )
                     .clip(CircleShape)
@@ -888,11 +724,8 @@ private fun RoundPips(
             )
         }
         if (showOverflow) {
-            Text(
-                text  = "\u2026",
-                color = Color.White.copy(alpha = 0.45f),
-                style = MaterialTheme.typography.bodySmall
-            )
+            Text("\u2026", color = Color.White.copy(alpha = 0.45f),
+                style = MaterialTheme.typography.bodySmall)
         }
     }
 }

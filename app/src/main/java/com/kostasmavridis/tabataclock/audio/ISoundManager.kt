@@ -1,21 +1,22 @@
 package com.kostasmavridis.tabataclock.audio
 
-/**
- * Contract for audio/haptic feedback during a Tabata session.
- * Decoupled from [SoundManager] so unit tests can inject a silent fake
- * without touching Android framework classes.
- */
 interface ISoundManager {
     fun playBeep()
     fun playWork()
     fun playRest()
     fun playDone()
     /**
-     * Tear down and rebuild the SoundPool, reloading all sounds from raw resources.
-     * Must be called each time the app returns to the foreground so that native
-     * AudioTrack sessions invalidated by aggressive OEM memory management
-     * (e.g. Oppo/OnePlus) are transparently restored.
+     * Tears down and rebuilds the SoundPool, reloading all sounds.
+     * Safe to call when the timer is NOT running (e.g. app foregrounded
+     * while idle). For mid-run reinitialisation use [reinitialiseIfNeeded].
      */
     fun reinitialise()
+    /**
+     * Same as [reinitialise] but safe to call at any time, including while
+     * the timer is running. Used when returning from Settings to recover
+     * AudioTrack sessions that may have been silenced by a focus change
+     * during the navigation transition.
+     */
+    fun reinitialiseIfNeeded()
     fun release()
 }
