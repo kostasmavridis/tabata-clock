@@ -55,7 +55,8 @@ jobs:
         run: |
           GRADLE_VERSION=9.5.1
           # Verify SHA-256 before executing — prevents MITM / CDN tampering.
-          EXPECTED_SHA256="f5d3f2b2e85e97e19e10f2f0e8ba5d52e699ee1f2e76e5ceabf4e3c9e72af41d"
+          # Source: https://gradle.org/release-checksums/ (binary-only ZIP)
+          EXPECTED_SHA256="bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f"
           curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
                -o /tmp/gradle.zip
           echo "${EXPECTED_SHA256}  /tmp/gradle.zip" | sha256sum --check --strict
