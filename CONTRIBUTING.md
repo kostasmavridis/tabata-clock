@@ -103,6 +103,12 @@ All 26 tests must pass before a PR can be merged.
 
 ## Project conventions
 
+### Stable releases only
+All dependencies and plugins must be at a **stable release** version. Alpha, beta, RC,
+preview, and dev versions are never used in this project — not on `main`, not on feature
+branches. When evaluating an upgrade, only consider the latest stable release. If no stable
+release is available yet, the upgrade waits.
+
 ### Interfaces first
 Every Android-dependent class (`SoundManager`, `SettingsRepository`, `TabataForegroundService`) is accessed through an interface (`ISoundManager`, `ISettingsRepository`, `ServiceNotifier`). This keeps `TabataViewModel` free of Android framework imports and makes it fully unit-testable.
 
@@ -161,6 +167,7 @@ Use `fastSettings.prepareSecs * 1_000L` rather than `3_000L`. If the test settin
 - [ ] No new lint warnings introduced
 - [ ] `scripts/generate_sounds.py` was run if sound files are relevant
 - [ ] Commit messages are descriptive (`feat:`, `fix:`, `test:`, `docs:`, `ci:` prefixes)
+- [ ] All dependency versions used are **stable releases** (no alpha/beta/RC/preview)
 - [ ] If `GRADLE_VERSION` was bumped, `EXPECTED_SHA256` has been updated in **all three**
   workflow files (`build.yml`, `release.yml`, `codeql.yml`) using the hash from
   <https://gradle.org/releases/> (binary-only `-bin` ZIP checksum)

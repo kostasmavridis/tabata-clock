@@ -204,6 +204,15 @@ guide is updated in the same commit.
 
 ## 6. Dependency Management
 
+### Stable releases only — no exceptions
+This project upgrades to **stable releases only**. Alpha, beta, RC,
+preview, dev, and any other pre-release versions are never used on `main`,
+never evaluated as candidates, and never mentioned in upgrade discussions.
+If the latest stable version does not yet provide a needed feature,
+the upgrade waits until a stable release does. Pre-release versions on
+a dedicated experiment branch are also not supported — the added
+complexity and instability is not worth it for a single-developer project.
+
 ### Check the full compatibility matrix, not just the direct dependency
 Many Android ecosystem libraries have implicit compatibility constraints
 with each other (annotation processor ↔ compiler ↔ runtime ↔ generated
@@ -216,12 +225,6 @@ Dependabot alerts, deprecated action warnings, and CodeQL findings are
 not noise — they are a queue. Triage them on a regular cadence.
 A security alert left open for weeks is a risk; a deprecation warning
 left open becomes a broken build.
-
-### Prefer stable releases for the compilation toolchain
-Alpha/beta/RC versions of AGP, KGP, KSP, and Hilt introduce instability
-across the entire build. Reserve pre-release toolchain versions for
-explicit experiments on a dedicated branch. The `main` branch always
-builds on stable releases.
 
 ---
 
