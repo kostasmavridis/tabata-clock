@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kostasmavridis.tabataclock.model.TabataPhase
 import com.kostasmavridis.tabataclock.ui.theme.PhaseColors
@@ -37,7 +37,7 @@ fun TimerScreen(
     val state    by viewModel.timerState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    // ── Phase colours ─────────────────────────────────────────────────────────
+    // ── Phase colours ────────────────────────────────────────────────────────────────────────
     val targetTop = when (state.phase) {
         TabataPhase.PREPARE -> PhaseColors.Prepare
         TabataPhase.WORK    -> PhaseColors.Work
@@ -53,14 +53,14 @@ fun TimerScreen(
     val topColor by animateColorAsState(targetTop, tween(500), label = "top")
     val botColor by animateColorAsState(targetBot, tween(500), label = "bot")
 
-    // ── Progress arc ──────────────────────────────────────────────────────────
+    // ── Progress arc ──────────────────────────────────────────────────────────────────────
     val arcProgress by animateFloatAsState(
         targetValue    = state.phaseProgress,
         animationSpec  = tween(900, easing = LinearEasing),
         label          = "arc"
     )
 
-    // ── Pulse glow when running ───────────────────────────────────────────────
+    // ── Pulse glow when running ─────────────────────────────────────────────────────────────
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by pulseAnim.animateFloat(
         initialValue   = 0.15f,
@@ -113,7 +113,7 @@ fun TimerScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // ── Countdown circle ─────────────────────────────────────────────────
+            // ── Countdown circle ───────────────────────────────────────────────────────────────────────
             Box(
                 modifier = Modifier
                     .size(260.dp)
@@ -258,7 +258,7 @@ fun TimerScreen(
 @Composable
 private fun RoundPips(
     total:        Int,
-    currentRound: Int,   // renamed from `current` to avoid shadowing the loop variable
+    currentRound: Int,
     active:       Boolean
 ) {
     val dotSize    = if (total <= 12) 10.dp else 7.dp

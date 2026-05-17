@@ -20,7 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kostasmavridis.tabataclock.BuildConfig
 import com.kostasmavridis.tabataclock.debug.debugActions
@@ -136,11 +136,6 @@ fun SettingsScreen(
                     )
                 }
 
-                // ── Debug section ─────────────────────────────────────────
-                // BuildConfig.DEBUG is a compile-time constant — the release
-                // R8 compiler removes this entire block via dead-code elimination.
-                // debugActions resolves to NoOpDebugActions in release and
-                // RealDebugActions in debug; neither crosses source-set boundaries.
                 if (BuildConfig.DEBUG) {
                     SettingsSectionHeader("Debug")
                     SettingsCard {
