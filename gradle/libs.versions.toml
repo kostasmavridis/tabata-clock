@@ -6,7 +6,7 @@ lifecycle = "2.9.3"
 composeBom = "2026.05.00"
 navigation = "2.9.8"
 hilt = "2.57.2"
-ksp = "2.2.21-1.0.29"
+ksp = "2.2.21-2.0.5"
 datastore = "1.2.1"
 activity = "1.10.1"
 # test
