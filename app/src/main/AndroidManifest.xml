@@ -23,10 +23,15 @@
         android:theme="@style/Theme.TabataClock"
         android:enableOnBackInvokedCallback="true">
 
+        <!--
+            screenOrientation="fullSensor": honours device auto-rotate setting and
+            supports portrait, landscape, reverse-landscape, and reverse-portrait.
+            Previously locked to "portrait" — removed to enable landscape support.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="portrait"
+            android:screenOrientation="fullSensor"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

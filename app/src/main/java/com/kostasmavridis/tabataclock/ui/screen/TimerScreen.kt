@@ -2,6 +2,7 @@ package com.kostasmavridis.tabataclock.ui.screen
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,8 +26,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -47,20 +50,20 @@ fun TimerScreen(
     val context  = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope    = rememberCoroutineScope()
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // Permission launcher — called when user taps Start and permission is missing.
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
             viewModel.start()
         } else {
-            viewModel.start() // Timer still runs; just no background notification.
+            viewModel.start()
             scope.launch {
                 snackbarHostState.showSnackbar(
-                    message     = "Timer running — notifications blocked. " +
-                                  "Enable in Settings to see phase updates when screen is off.",
-                    duration    = SnackbarDuration.Long
+                    message  = "Timer running — notifications blocked. " +
+                               "Enable in Settings to see phase updates when screen is off.",
+                    duration = SnackbarDuration.Long
                 )
             }
         }
@@ -94,16 +97,16 @@ fun TimerScreen(
     val botColor by animateColorAsState(targetBot, tween(500), label = "bot")
 
     val arcProgress by animateFloatAsState(
-        targetValue    = state.phaseProgress,
-        animationSpec  = tween(900, easing = LinearEasing),
-        label          = "arc"
+        targetValue   = state.phaseProgress,
+        animationSpec = tween(900, easing = LinearEasing),
+        label         = "arc"
     )
 
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by pulseAnim.animateFloat(
-        initialValue   = 0.15f,
-        targetValue    = 0.45f,
-        animationSpec  = infiniteRepeatable(
+        initialValue  = 0.15f,
+        targetValue   = 0.45f,
+        animationSpec = infiniteRepeatable(
             animation  = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
@@ -112,9 +115,9 @@ fun TimerScreen(
     val glowAlpha = if (state.isRunning) pulseAlpha else 0f
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost   = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent,
-        modifier = Modifier
+        modifier       = Modifier
             .fillMaxSize()
             .background(brush = Brush.verticalGradient(listOf(topColor, botColor)))
     ) { padding ->
@@ -123,8 +126,9 @@ fun TimerScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // Settings icon always top-end regardless of orientation
             IconButton(
-                onClick = onNavigateToSettings,
+                onClick  = onNavigateToSettings,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(16.dp)
@@ -136,163 +140,319 @@ fun TimerScreen(
                 )
             }
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(bottom = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-
-                Text(
-                    text  = state.phase.label.uppercase(),
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        letterSpacing = 6.sp,
-                        fontWeight    = FontWeight.Bold
-                    ),
-                    color = Color.White.copy(alpha = 0.85f)
+            if (isLandscape) {
+                TimerContentLandscape(
+                    state        = state,
+                    settings     = settings,
+                    topColor     = topColor,
+                    arcProgress  = arcProgress,
+                    glowAlpha    = glowAlpha,
+                    onStartTapped   = ::onStartTapped,
+                    onPause      = { viewModel.pause() },
+                    onResume     = { viewModel.resume() },
+                    onReset      = { viewModel.reset() }
                 )
-
-                Spacer(Modifier.height(16.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(260.dp)
-                        .drawWithCache {
-                            val stroke     = 16.dp.toPx()
-                            val glowStroke = 32.dp.toPx()
-                            val inset      = stroke / 2f
-                            val arcSize    = Size(size.width - stroke, size.height - stroke)
-                            val topLeft    = Offset(inset, inset)
-                            onDrawBehind {
-                                drawArc(
-                                    color      = Color.White.copy(alpha = glowAlpha),
-                                    startAngle = -90f,
-                                    sweepAngle = 360f * arcProgress,
-                                    useCenter  = false,
-                                    topLeft    = topLeft,
-                                    size       = arcSize,
-                                    style      = Stroke(width = glowStroke, cap = StrokeCap.Round)
-                                )
-                                drawArc(
-                                    color      = Color.White.copy(alpha = 0.12f),
-                                    startAngle = -90f,
-                                    sweepAngle = 360f,
-                                    useCenter  = false,
-                                    topLeft    = topLeft,
-                                    size       = arcSize,
-                                    style      = Stroke(width = stroke, cap = StrokeCap.Round)
-                                )
-                                drawArc(
-                                    color      = Color.White.copy(alpha = 0.90f),
-                                    startAngle = -90f,
-                                    sweepAngle = 360f * arcProgress,
-                                    useCenter  = false,
-                                    topLeft    = topLeft,
-                                    size       = arcSize,
-                                    style      = Stroke(width = stroke, cap = StrokeCap.Round)
-                                )
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(220.dp)
-                            .clip(CircleShape)
-                            .background(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = 0.10f),
-                                        Color.Black.copy(alpha = 0.35f)
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text       = "%02d".format(state.secondsLeft),
-                            fontSize   = 88.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color      = Color.White
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                RoundPips(
-                    total        = settings.rounds,
-                    currentRound = state.currentRound,
-                    active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
+            } else {
+                TimerContentPortrait(
+                    state        = state,
+                    settings     = settings,
+                    topColor     = topColor,
+                    arcProgress  = arcProgress,
+                    glowAlpha    = glowAlpha,
+                    onStartTapped   = ::onStartTapped,
+                    onPause      = { viewModel.pause() },
+                    onResume     = { viewModel.resume() },
+                    onReset      = { viewModel.reset() }
                 )
+            }
+        }
+    }
+}
 
-                Spacer(Modifier.height(10.dp))
+// ---------------------------------------------------------------------------
+// Portrait layout (original)
+// ---------------------------------------------------------------------------
 
-                Text(
-                    text  = "Round ${state.currentRound} / ${settings.rounds}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White.copy(alpha = 0.75f)
-                )
-                if (settings.sets > 1) {
-                    Text(
-                        text  = "Set ${state.currentSet} / ${settings.sets}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.5f)
+@Composable
+private fun TimerContentPortrait(
+    state        : com.kostasmavridis.tabataclock.viewmodel.TabataViewModel.TimerState,
+    settings     : com.kostasmavridis.tabataclock.model.TabataSettings,
+    topColor     : Color,
+    arcProgress  : Float,
+    glowAlpha    : Float,
+    onStartTapped: () -> Unit,
+    onPause      : () -> Unit,
+    onResume     : () -> Unit,
+    onReset      : () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .align(Alignment.Center)
+            .padding(bottom = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        PhaseLabel(state.phase)
+        Spacer(Modifier.height(16.dp))
+        TimerArc(
+            arcSize     = 260.dp,
+            digitSize   = 88,
+            arcProgress = arcProgress,
+            glowAlpha   = glowAlpha,
+            secondsLeft = state.secondsLeft
+        )
+        Spacer(Modifier.height(20.dp))
+        RoundPips(
+            total        = settings.rounds,
+            currentRound = state.currentRound,
+            active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
+        )
+        Spacer(Modifier.height(10.dp))
+        RoundSetLabels(state = state, settings = settings)
+        Spacer(Modifier.height(44.dp))
+        TimerControls(
+            isRunning     = state.isRunning,
+            isPaused      = state.isPaused,
+            topColor      = topColor,
+            onStartTapped = onStartTapped,
+            onPause       = onPause,
+            onResume      = onResume,
+            onReset       = onReset
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Landscape layout (new)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun BoxScope.TimerContentLandscape(
+    state        : com.kostasmavridis.tabataclock.viewmodel.TabataViewModel.TimerState,
+    settings     : com.kostasmavridis.tabataclock.model.TabataSettings,
+    topColor     : Color,
+    arcProgress  : Float,
+    glowAlpha    : Float,
+    onStartTapped: () -> Unit,
+    onPause      : () -> Unit,
+    onResume     : () -> Unit,
+    onReset      : () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment     = Alignment.CenterVertically
+    ) {
+        // Left: arc + countdown number
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier         = Modifier.weight(1f)
+        ) {
+            TimerArc(
+                arcSize     = 200.dp,
+                digitSize   = 64,
+                arcProgress = arcProgress,
+                glowAlpha   = glowAlpha,
+                secondsLeft = state.secondsLeft
+            )
+        }
+
+        // Right: everything else
+        Column(
+            modifier            = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            PhaseLabel(state.phase)
+            Spacer(Modifier.height(12.dp))
+            RoundPips(
+                total        = settings.rounds,
+                currentRound = state.currentRound,
+                active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
+            )
+            Spacer(Modifier.height(8.dp))
+            RoundSetLabels(state = state, settings = settings)
+            Spacer(Modifier.height(24.dp))
+            TimerControls(
+                isRunning     = state.isRunning,
+                isPaused      = state.isPaused,
+                topColor      = topColor,
+                onStartTapped = onStartTapped,
+                onPause       = onPause,
+                onResume      = onResume,
+                onReset       = onReset
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shared sub-composables
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun PhaseLabel(phase: TabataPhase) {
+    Text(
+        text  = phase.label.uppercase(),
+        style = MaterialTheme.typography.headlineSmall.copy(
+            letterSpacing = 6.sp,
+            fontWeight    = FontWeight.Bold
+        ),
+        color = Color.White.copy(alpha = 0.85f)
+    )
+}
+
+@Composable
+private fun TimerArc(
+    arcSize     : Dp,
+    digitSize   : Int,
+    arcProgress : Float,
+    glowAlpha   : Float,
+    secondsLeft : Int
+) {
+    val innerSize = arcSize - 60.dp
+    Box(
+        modifier = Modifier
+            .size(arcSize)
+            .drawWithCache {
+                val stroke     = 16.dp.toPx()
+                val glowStroke = 32.dp.toPx()
+                val inset      = stroke / 2f
+                val arcSz      = Size(size.width - stroke, size.height - stroke)
+                val topLeft    = Offset(inset, inset)
+                onDrawBehind {
+                    drawArc(
+                        color      = Color.White.copy(alpha = glowAlpha),
+                        startAngle = -90f,
+                        sweepAngle = 360f * arcProgress,
+                        useCenter  = false,
+                        topLeft    = topLeft,
+                        size       = arcSz,
+                        style      = Stroke(width = glowStroke, cap = StrokeCap.Round)
+                    )
+                    drawArc(
+                        color      = Color.White.copy(alpha = 0.12f),
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter  = false,
+                        topLeft    = topLeft,
+                        size       = arcSz,
+                        style      = Stroke(width = stroke, cap = StrokeCap.Round)
+                    )
+                    drawArc(
+                        color      = Color.White.copy(alpha = 0.90f),
+                        startAngle = -90f,
+                        sweepAngle = 360f * arcProgress,
+                        useCenter  = false,
+                        topLeft    = topLeft,
+                        size       = arcSz,
+                        style      = Stroke(width = stroke, cap = StrokeCap.Round)
                     )
                 }
-
-                Spacer(Modifier.height(44.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(28.dp),
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick  = { viewModel.reset() },
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.12f))
-                    ) {
-                        Icon(
-                            imageVector        = Icons.Default.Refresh,
-                            contentDescription = "Reset",
-                            tint               = Color.White,
-                            modifier           = Modifier.size(26.dp)
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(innerSize)
+                .clip(CircleShape)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.10f),
+                            Color.Black.copy(alpha = 0.35f)
                         )
-                    }
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text       = "%02d".format(secondsLeft),
+                fontSize   = digitSize.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color      = Color.White
+            )
+        }
+    }
+}
 
-                    FloatingActionButton(
-                        onClick = {
-                            when {
-                                state.isRunning -> viewModel.pause()
-                                state.isPaused  -> viewModel.resume()
-                                else            -> onStartTapped()
-                            }
-                        },
-                        modifier       = Modifier.size(80.dp),
-                        shape          = CircleShape,
-                        containerColor = Color.White,
-                        elevation      = FloatingActionButtonDefaults.elevation(8.dp, 12.dp)
-                    ) {
-                        Icon(
-                            imageVector        = if (state.isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (state.isRunning) "Pause" else "Play",
-                            tint               = topColor,
-                            modifier           = Modifier.size(42.dp)
-                        )
-                    }
+@Composable
+private fun RoundSetLabels(
+    state    : com.kostasmavridis.tabataclock.viewmodel.TabataViewModel.TimerState,
+    settings : com.kostasmavridis.tabataclock.model.TabataSettings
+) {
+    Text(
+        text  = "Round ${state.currentRound} / ${settings.rounds}",
+        style = MaterialTheme.typography.titleMedium,
+        color = Color.White.copy(alpha = 0.75f)
+    )
+    if (settings.sets > 1) {
+        Text(
+            text  = "Set ${state.currentSet} / ${settings.sets}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.5f)
+        )
+    }
+}
+
+@Composable
+private fun TimerControls(
+    isRunning     : Boolean,
+    isPaused      : Boolean,
+    topColor      : Color,
+    onStartTapped : () -> Unit,
+    onPause       : () -> Unit,
+    onResume      : () -> Unit,
+    onReset       : () -> Unit
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
+        verticalAlignment     = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick  = onReset,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.12f))
+        ) {
+            Icon(
+                imageVector        = Icons.Default.Refresh,
+                contentDescription = "Reset",
+                tint               = Color.White,
+                modifier           = Modifier.size(26.dp)
+            )
+        }
+
+        FloatingActionButton(
+            onClick = {
+                when {
+                    isRunning -> onPause()
+                    isPaused  -> onResume()
+                    else      -> onStartTapped()
                 }
-            }
+            },
+            modifier       = Modifier.size(80.dp),
+            shape          = CircleShape,
+            containerColor = Color.White,
+            elevation      = FloatingActionButtonDefaults.elevation(8.dp, 12.dp)
+        ) {
+            Icon(
+                imageVector        = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = if (isRunning) "Pause" else "Play",
+                tint               = topColor,
+                modifier           = Modifier.size(42.dp)
+            )
         }
     }
 }
 
 @Composable
 private fun RoundPips(
-    total:        Int,
-    currentRound: Int,
-    active:       Boolean
+    total        : Int,
+    currentRound : Int,
+    active       : Boolean
 ) {
     val dotSize    = if (total <= 12) 10.dp else 7.dp
     val dotSpacing = if (total <= 12) 6.dp  else 4.dp
