@@ -17,22 +17,6 @@ import com.kostasmavridis.tabataclock.R
  *
  * The ViewModel drives all timer logic; this service exists solely to post a
  * persistent notification so Android won't kill the process.
- *
- * foregroundServiceType = mediaPlayback:
- *   The service plays audio cues during workout phases. This type requires only
- *   FOREGROUND_SERVICE_MEDIA_PLAYBACK — no sensor permissions needed.
- *   The 'health' type was incorrect as it mandates ACTIVITY_RECOGNITION /
- *   BODY_SENSORS / HIGH_SAMPLING_RATE_SENSORS (Android 14+).
- *
- * Start it when the user presses Play; stop it on Reset or when the cycle completes.
- *
- * Lifecycle notes
- * ───────────────
- * Returns START_NOT_STICKY: the ViewModel owns all timer state via a coroutine
- * running inside viewModelScope. If Android kills the process, both the ViewModel
- * coroutine and this service are destroyed together. There is nothing to re-display,
- * so the service must NOT be auto-restarted with a null Intent (which is what
- * START_STICKY would do, resulting in a stale notification).
  */
 class TabataForegroundService : Service() {
 
@@ -45,8 +29,17 @@ class TabataForegroundService : Service() {
         const val EXTRA_ROUND         = "extra_round"
     }
 
+    private lateinit var openIntent: PendingIntent
+
     override fun onCreate() {
         super.onCreate()
+        openIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         createNotificationChannel()
     }
 
@@ -57,10 +50,17 @@ class TabataForegroundService : Service() {
 
         try {
             startForeground(NOTIFICATION_ID, buildNotification(phase, seconds, round))
-        } catch (e: Exception) {
-            // Safety net: catches any residual SecurityException or
-            // ForegroundServiceStartNotAllowedException that slips through.
-            Log.e(TAG, "startForeground failed — stopping service: ${e.message}")
+        } catch (e: SecurityException) {
+            // POST_NOTIFICATIONS not granted (shouldn't reach here after UI guards,
+            // but handle defensively).
+            Log.e(TAG, "startForeground denied — missing permission: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        } catch (e: IllegalStateException) {
+            // ForegroundServiceStartNotAllowedException (Android 12+) extends
+            // IllegalStateException. Catches the case where the app is in the
+            // background when startForegroundService() is called.
+            Log.e(TAG, "startForeground not allowed — app in background: ${e.message}")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -69,13 +69,6 @@ class TabataForegroundService : Service() {
     }
 
     private fun buildNotification(phase: String, secondsLeft: Int, round: Int): Notification {
-        val openIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-            },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_timer_notification)
             .setContentTitle("Tabata — $phase")
