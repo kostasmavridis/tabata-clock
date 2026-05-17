@@ -16,11 +16,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kostasmavridis.tabataclock.BuildConfig
 import com.kostasmavridis.tabataclock.ui.theme.PhaseColors
 import com.kostasmavridis.tabataclock.viewmodel.TabataViewModel
 
@@ -35,6 +37,7 @@ fun SettingsScreen(
     viewModel: TabataViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val context  = LocalContext.current
 
     Box(
         modifier = Modifier
@@ -130,6 +133,58 @@ fun SettingsScreen(
                         range    = 1..10,
                         onChange = { viewModel.updateSettings(settings.copy(sets = it)) }
                     )
+                }
+
+                // ── Debug section ─────────────────────────────────────────
+                // Visible only in debug builds (BuildConfig.DEBUG is a
+                // compile-time constant; the release compiler removes this
+                // entire block via dead-code elimination).
+                if (BuildConfig.DEBUG) {
+                    SettingsSectionHeader("Debug")
+                    SettingsCard {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment     = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment     = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector        = Icons.Default.BugReport,
+                                    contentDescription = null,
+                                    tint               = Color(0xFFFF5252),
+                                    modifier           = Modifier.size(20.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text  = "Export logs",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = Color.White.copy(alpha = 0.85f)
+                                    )
+                                    Text(
+                                        text  = "Share logcat via share sheet",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.White.copy(alpha = 0.45f)
+                                    )
+                                }
+                            }
+                            FilledTonalButton(
+                                onClick = {
+                                    com.kostasmavridis.tabataclock.debug.LogExporter.share(context)
+                                },
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color(0xFFFF5252).copy(alpha = 0.18f),
+                                    contentColor   = Color(0xFFFF5252)
+                                )
+                            ) {
+                                Text("Share")
+                            }
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Exposes only app/cache/logs/ — the directory LogExporter writes to.
+    Nothing else in the cache or files dir is accessible via this provider.
+-->
+<paths>
+    <cache-path
+        name="debug_logs"
+        path="logs/" />
+</paths>
