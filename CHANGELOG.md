@@ -7,9 +7,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-### Changed
-- Compose BOM bumped from `2025.11.00` → `2026.04.00` (Compose 1.11 / Material3 1.4)
-
 ### Planned
 - Coordinated upgrade bundle: AGP 9 + Kotlin 2.3 + KSP2 + Gradle 9  
   _(deferred until Hilt confirms full KSP2 compatibility; Kotlin 2.3 drops KSP1 support)_
@@ -59,7 +56,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ### Changed
 - Kotlin upgraded from `2.0.0` → `2.1.21`.
 - Hilt upgraded from `2.51.1` → `2.57.2`; KSP updated to `2.1.21-2.0.1`.
-- Compose BOM upgraded from `2024.08.00` → `2025.11.00`.
+- Compose BOM verified at `2025.11.00` — current latest stable per Google Maven.
 - AGP upgraded from `8.4.x` → `8.10.1`.
 - All Lifecycle, Navigation, DataStore, Activity, and AndroidX Core libraries bumped
   to latest stable.

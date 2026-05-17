@@ -19,7 +19,7 @@ Built with Kotlin · Jetpack Compose · MVVM · Hilt · Coroutines
 
 ### Stack
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1.21-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Jetpack Compose BOM](https://img.shields.io/badge/Compose%20BOM-2026.04.00-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Jetpack Compose BOM](https://img.shields.io/badge/Compose%20BOM-2025.11.00-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Hilt](https://img.shields.io/badge/Hilt-2.57.2-FF6F00?logo=google&logoColor=white)](https://dagger.dev/hilt/)
 [![Min SDK](https://img.shields.io/badge/Min%20SDK-26%20(Android%208.0)-brightgreen?logo=android)](https://developer.android.com/about/versions/oreo)
 [![Target SDK](https://img.shields.io/badge/Target%20SDK-35%20(Android%2015)-brightgreen?logo=android)](https://developer.android.com/about/versions/15)
