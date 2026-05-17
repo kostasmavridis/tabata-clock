@@ -10,9 +10,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -41,9 +39,6 @@ import com.kostasmavridis.tabataclock.model.TabataPhase
 import com.kostasmavridis.tabataclock.model.gradientColors
 import com.kostasmavridis.tabataclock.viewmodel.TabataViewModel
 import kotlinx.coroutines.launch
-
-// Height reserved at the top so content never slides under the settings button.
-private val SETTINGS_BUTTON_CLEARANCE = 64.dp
 
 @Composable
 fun TimerScreen(
@@ -146,9 +141,10 @@ fun TimerScreen(
                 )
             }
 
-            // Settings button rendered last so it draws on top, but content
-            // already reserves SETTINGS_BUTTON_CLEARANCE at the top so nothing
-            // slides underneath it.
+            // Settings button rendered last so it draws on top of content.
+            // top = 12.dp is intentionally less than end = 16.dp: the button
+            // sits closer to the top edge for visual balance. Do not
+            // "correct" this to uniform padding.
             IconButton(
                 onClick  = onNavigateToSettings,
                 modifier = Modifier
@@ -181,42 +177,54 @@ private fun TimerContentPortrait(
     onResume     : () -> Unit,
     onReset      : () -> Unit
 ) {
-    Column(
+    // Reserve space at the top for the settings button (IconButton default
+    // touch target 48.dp + padding(top = 12.dp) = 60.dp, rounded to 64.dp).
+    // The bottom padding consumes the navigation bar inset so content is
+    // never obscured by gesture handles or nav buttons.
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            // Push content below the settings button area
-            .padding(top = SETTINGS_BUTTON_CLEARANCE, bottom = 32.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(
+                top    = 64.dp,
+                bottom = WindowInsets.navigationBars
+                    .asPaddingValues()
+                    .calculateBottomPadding()
+                    .coerceAtLeast(16.dp)
+            ),
+        contentAlignment = Alignment.Center
     ) {
-        PhaseLabel(state.phase)
-        Spacer(Modifier.height(16.dp))
-        TimerArc(
-            arcSize     = 260.dp,
-            digitSize   = 88,
-            arcProgress = arcProgress,
-            glowAlpha   = glowAlpha,
-            secondsLeft = state.secondsLeft
-        )
-        Spacer(Modifier.height(20.dp))
-        RoundPips(
-            total        = settings.rounds,
-            currentRound = state.currentRound,
-            active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
-        )
-        Spacer(Modifier.height(10.dp))
-        RoundSetLabels(state = state, settings = settings)
-        Spacer(Modifier.height(44.dp))
-        TimerControls(
-            isRunning     = state.isRunning,
-            isPaused      = state.isPaused,
-            topColor      = topColor,
-            onStartTapped = onStartTapped,
-            onPause       = onPause,
-            onResume      = onResume,
-            onReset       = onReset
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            PhaseLabel(state.phase)
+            Spacer(Modifier.height(16.dp))
+            TimerArc(
+                arcSize     = 260.dp,
+                digitSize   = 88,
+                arcProgress = arcProgress,
+                glowAlpha   = glowAlpha,
+                secondsLeft = state.secondsLeft
+            )
+            Spacer(Modifier.height(20.dp))
+            RoundPips(
+                total        = settings.rounds,
+                currentRound = state.currentRound,
+                active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
+            )
+            Spacer(Modifier.height(10.dp))
+            RoundSetLabels(state = state, settings = settings)
+            Spacer(Modifier.height(44.dp))
+            TimerControls(
+                isRunning     = state.isRunning,
+                isPaused      = state.isPaused,
+                topColor      = topColor,
+                onStartTapped = onStartTapped,
+                onPause       = onPause,
+                onResume      = onResume,
+                onReset       = onReset
+            )
+        }
     }
 }
 
