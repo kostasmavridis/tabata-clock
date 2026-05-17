@@ -2,7 +2,7 @@
 # can raise security alerts and version-update PRs.
 #
 # WHY NOT gradle/actions/dependency-submission@v4?
-# ───────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────
 # That action invokes ./gradlew internally before our bootstrap step
 # has placed gradle-wrapper.jar on disk, always failing with
 # "Could not find or load main class org.gradle.wrapper.GradleWrapperMain".
@@ -10,19 +10,18 @@
 # with dependency-graph: generate-and-submit instead.
 #
 # WHY NOT GitHub's built-in Automatic Dependency Submission (Gradle)?
-# ───────────────────────────────────────────────────
+# ───────────────────────────────────────────────────────
 # Same root cause. Disable under: Settings → Security → Code security →
 # Dependency graph → Automatic dependency submission for Gradle → OFF
 #
 # WHY -Dorg.gradle.resolution.sources=false?
-# ───────────────────────────────────────────────────
+# ──────────────────────────────────────────────────
 # The ForceDependencyResolutionPlugin resolves *all* configurations,
 # including *DependencySources ones. Many artifacts (local :app module,
 # androidx.compose.ui:ui-tooling, etc.) don't publish -sources.jar,
 # causing noisy FAILED entries in the build summary. These failures are
 # cosmetic — the dependency graph is still submitted correctly — but
-# suppressing source resolution keeps the summary clean and avoids
-# confusing "FAILED" annotations on a green run.
+# suppressing source resolution keeps the summary clean.
 
 name: Dependency Submission
 
@@ -45,7 +44,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ── Python: generate sound WAV files ────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -54,17 +52,15 @@ jobs:
       - name: Generate sound files
         run: python scripts/generate_sounds.py
 
-      # ── Java ─────────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── Bootstrap Gradle wrapper JAR ────────────────────────────────────────
       - name: Bootstrap Gradle wrapper JAR
         run: |
-          GRADLE_VERSION=8.14.1
+          GRADLE_VERSION=9.5.1
           curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
                -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
@@ -73,9 +69,6 @@ jobs:
             --distribution-type bin
           chmod +x gradlew
 
-      # ── Setup Gradle (enables dependency graph generation + build scan) ──────
-      # gradle/actions/setup-gradle@v4 ships Node 20 internally.
-      # Force it to run on Node 24 to suppress the deprecation warning.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         env:
@@ -86,16 +79,9 @@ jobs:
           build-scan-terms-of-use-url: "https://gradle.com/terms-of-service"
           build-scan-terms-of-use-agree: "yes"
 
-      # ── Decode keystore ────────────────────────────────────────────
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
 
-      # ── Resolve all dependencies ──────────────────────────────────────────
-      # -Dorg.gradle.resolution.sources=false skips *DependencySources
-      # configurations that the ForceDependencyResolutionPlugin adds.
-      # This eliminates FAILED entries for artifacts that don't publish
-      # -sources.jar (local :app module, ui-tooling, etc.) without
-      # affecting the accuracy of the submitted dependency graph.
       - name: Resolve dependencies and submit graph
         env:
           KEYSTORE_PATH: tabata-release.keystore

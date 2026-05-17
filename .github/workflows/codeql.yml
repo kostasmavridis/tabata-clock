@@ -1,17 +1,7 @@
 # CodeQL static analysis
-# Docs: https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/codeql-code-scanning-for-compiled-languages
-#
 # Language: kotlin (compiled — requires an actual build to extract the code graph)
 #
-# Why a custom build command?
-# ─────────────────────
-# CodeQL's autobuild for Kotlin/Android frequently fails on projects that:
-#   • use a version catalog (libs.versions.toml)
-#   • require sound files in res/raw/ before Gradle configuration completes
-#   • have a missing gradle-wrapper.jar (binary, not committed to this repo)
-# We therefore provide an explicit build command that mirrors build.yml exactly.
-#
-# Schedule: weekly on Saturday at 03:00 Athens time (off-peak, avoids Monday CI noise).
+# Schedule: weekly on Saturday at 03:00 Athens time (off-peak).
 # On every push/PR to main: immediate scan so new code is never unscanned.
 
 name: CodeQL Analysis
@@ -32,11 +22,9 @@ on:
       - '.github/dependabot.yml'
       - 'scripts/**'
   schedule:
-    # Saturday 03:00 EEST (00:00 UTC) — low-traffic window
     - cron: '0 0 * * 6'
   workflow_dispatch:
 
-# Cancel any in-progress scan for the same workflow + branch/PR.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'schedule' && 'scheduled' || github.ref }}
   cancel-in-progress: true
@@ -60,7 +48,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ── Python: generate sound WAV files ────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -69,17 +56,15 @@ jobs:
       - name: Generate sound files
         run: python scripts/generate_sounds.py
 
-      # ── Java ─────────────────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── Bootstrap Gradle wrapper JAR ─────────────────────────────────────────
       - name: Bootstrap Gradle wrapper JAR
         run: |
-          GRADLE_VERSION=8.14.5
+          GRADLE_VERSION=9.5.1
           curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
                -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
@@ -88,11 +73,9 @@ jobs:
             --distribution-type bin
           chmod +x gradlew
 
-      # ── Decode keystore ──────────────────────────────────────────────────────
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
 
-      # ── Initialise CodeQL ────────────────────────────────────────────────────
       - name: Initialise CodeQL
         uses: github/codeql-action/init@v4
         with:
@@ -107,7 +90,6 @@ jobs:
               - "**/*Hilt_*"
               - "**/ComposableSingletons*"
 
-      # ── Build (CodeQL traces this for Kotlin extraction) ─────────────────────
       - name: Build (CodeQL extraction)
         env:
           KEYSTORE_PATH: tabata-release.keystore
@@ -116,7 +98,6 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleDebug --stacktrace
 
-      # ── Analyse ──────────────────────────────────────────────────────────────
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:

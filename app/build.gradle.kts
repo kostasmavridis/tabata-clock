@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
+    // kotlin.android is replaced by AGP 9 built-in Kotlin (android.builtInKotlin=true).
+    // kotlin.compose is wired automatically by built-in Kotlin when compose = true.
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.android.junit5)
@@ -39,7 +39,6 @@ android {
 
     buildTypes {
         debug {
-            // Use the persistent keystore when available (CI), otherwise fall back to default debug signing
             val releaseSigning = signingConfigs.findByName("release")
             if (releaseSigning != null) signingConfig = releaseSigning
         }
@@ -58,7 +57,7 @@ android {
 
     buildFeatures {
         compose     = true
-        buildConfig = true   // required for BuildConfig.DEBUG in SettingsScreen
+        buildConfig = true
     }
 
     packaging {
@@ -71,15 +70,6 @@ android {
         unitTests.all {
             it.useJUnitPlatform()
         }
-    }
-}
-
-// Top-level kotlin {} block — provided by the kotlin-android plugin.
-// This is the correct replacement for the deprecated kotlinOptions DSL
-// in Kotlin 2.3.x. See https://kotl.in/u1r8ln
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
