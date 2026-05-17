@@ -15,6 +15,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Force every action in this job onto Node 24.
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       - uses: actions/checkout@v5
 
@@ -45,12 +49,8 @@ jobs:
             --distribution-type bin \
             --warning-mode all
 
-      # gradle/actions/setup-gradle@v4 ships Node 20 internally.
-      # Force it to run on Node 24 to suppress the deprecation warning.
       - name: Setup Gradle (caching)
         uses: gradle/actions/setup-gradle@v4
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           build-scan-publish: true
           build-scan-terms-of-use-url: "https://gradle.com/terms-of-service"
@@ -80,7 +80,7 @@ jobs:
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v4.7.0
         with:
           name: test-reports
           path: app/build/reports/tests/
@@ -89,7 +89,7 @@ jobs:
         run: ./gradlew koverXmlReport --warning-mode all --no-configuration-cache
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v4.7.0
         with:
           name: kover-coverage-report
           path: app/build/reports/kover/report.xml
@@ -104,7 +104,7 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace --warning-mode all --no-configuration-cache
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v4.7.0
         with:
           name: tabata-clock-debug
           path: app/build/outputs/apk/debug/app-debug.apk
@@ -112,7 +112,7 @@ jobs:
       # ── Gradle problems report ──────────────────────────────
       - name: Upload Gradle problems report
         if: always()
-        uses: actions/upload-artifact@v4.6.2
+        uses: actions/upload-artifact@v4.7.0
         with:
           name: gradle-problems-report
           path: build/reports/problems/problems-report.html
