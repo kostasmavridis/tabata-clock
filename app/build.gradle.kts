@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     // kotlin.android omitted: AGP 9 built-in Kotlin handles compilation.
-    // kotlin.compose omitted: wired automatically when buildFeatures.compose = true.
+    alias(libs.plugins.kotlin.compose)  // still required for Compose compiler
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.android.junit5)
