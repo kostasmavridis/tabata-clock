@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @HiltViewModel
@@ -33,8 +32,12 @@ class TabataViewModel @Inject constructor(
 ) : AndroidViewModel(application) {
 
     // ── Settings ─────────────────────────────────────────────────────────
+    // repo.settingsFlow is already a StateFlow (guaranteed by ISettingsRepository).
+    // Re-sharing it in viewModelScope allows the ViewModel to control the sharing
+    // lifetime (tied to the ViewModel, not the repository scope) while still
+    // exposing a StateFlow with a synchronously readable .value.
     val settings: StateFlow<TabataSettings> = repo.settingsFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TabataSettings())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.settingsFlow.value)
 
     fun updateSettings(s: TabataSettings) {
         viewModelScope.launch { repo.saveSettings(s) }
@@ -48,8 +51,7 @@ class TabataViewModel @Inject constructor(
         val currentRound: Int = 1,
         val currentSet: Int = 1,
         val isRunning: Boolean = false,
-        val isPaused: Boolean = false,
-        val totalElapsedSecs: Int = 0
+        val isPaused: Boolean = false
     ) {
         /** 0.0 (phase start) → 1.0 (phase end) */
         val phaseProgress: Float
@@ -57,14 +59,10 @@ class TabataViewModel @Inject constructor(
                     else 1f - (secondsLeft.toFloat() / phaseDurationSecs.toFloat())
     }
 
-    // Read the very first settings value synchronously so that secondsLeft is
-    // correct before any coroutine has had a chance to run.
-    private val initialSettings: TabataSettings = runBlocking { repo.settingsFlow.first() }
-
     private val _timerState = MutableStateFlow(
         TimerState(
-            secondsLeft       = initialSettings.prepareSecs,
-            phaseDurationSecs = initialSettings.prepareSecs
+            secondsLeft       = repo.settingsFlow.value.prepareSecs,
+            phaseDurationSecs = repo.settingsFlow.value.prepareSecs
         )
     )
     val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
@@ -72,15 +70,6 @@ class TabataViewModel @Inject constructor(
     private var timerJob: Job? = null
 
     // ── Lifecycle callbacks ───────────────────────────────────────────
-
-    /**
-     * Called from [MainActivity.onResume] every time the app returns to the
-     * foreground. Rebuilds the SoundPool so that native AudioTrack sessions
-     * invalidated by OEM memory management are transparently restored.
-     *
-     * Skipped while the timer is actively running to avoid a brief audio gap
-     * if the user switches apps and immediately returns mid-workout.
-     */
     fun onAppForegrounded() {
         if (!_timerState.value.isRunning) {
             soundManager.reinitialise()
@@ -113,9 +102,7 @@ class TabataViewModel @Inject constructor(
     fun reset() {
         timerJob?.cancel()
         serviceNotifier.stop()
-        // Always read from repo directly — the WhileSubscribed StateFlow may not
-        // have an active subscriber in tests (or immediately after creation).
-        val prepareSecs = runBlocking { repo.settingsFlow.first() }.prepareSecs
+        val prepareSecs = settings.value.prepareSecs
         _timerState.value = TimerState(
             secondsLeft       = prepareSecs,
             phaseDurationSecs = prepareSecs
@@ -156,8 +143,7 @@ class TabataViewModel @Inject constructor(
                 it.copy(
                     phase             = phase,
                     secondsLeft       = remaining,
-                    phaseDurationSecs = totalSecs,
-                    totalElapsedSecs  = it.totalElapsedSecs + 1
+                    phaseDurationSecs = totalSecs
                 )
             }
             serviceNotifier.notify(phase, remaining, state.currentRound)

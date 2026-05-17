@@ -16,7 +16,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,7 +37,6 @@ fun SettingsScreen(
     viewModel: TabataViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val context  = LocalContext.current
 
     Box(
         modifier = Modifier
@@ -137,6 +135,7 @@ fun SettingsScreen(
                 }
 
                 if (BuildConfig.DEBUG) {
+                    val context = androidx.compose.ui.platform.LocalContext.current
                     SettingsSectionHeader("Debug")
                     SettingsCard {
                         Row(
@@ -312,7 +311,7 @@ private fun StepSetting(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             FilledIconButton(
-                onClick  = { if (value > range.first) onChange(value - 1) },
+                onClick  = { onChange(value - 1) },
                 enabled  = value > range.first,
                 modifier = Modifier.size(36.dp),
                 colors   = IconButtonDefaults.filledIconButtonColors(
@@ -330,7 +329,7 @@ private fun StepSetting(
                 modifier  = Modifier.widthIn(min = 36.dp),
             )
             FilledIconButton(
-                onClick  = { if (value < range.last) onChange(value + 1) },
+                onClick  = { onChange(value + 1) },
                 enabled  = value < range.last,
                 modifier = Modifier.size(36.dp),
                 colors   = IconButtonDefaults.filledIconButtonColors(

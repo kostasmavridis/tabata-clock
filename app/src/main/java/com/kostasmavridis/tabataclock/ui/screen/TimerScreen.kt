@@ -36,7 +36,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kostasmavridis.tabataclock.model.TabataPhase
-import com.kostasmavridis.tabataclock.ui.theme.PhaseColors
+import com.kostasmavridis.tabataclock.model.gradientColors
 import com.kostasmavridis.tabataclock.viewmodel.TabataViewModel
 import kotlinx.coroutines.launch
 
@@ -81,18 +81,7 @@ fun TimerScreen(
         }
     }
 
-    val targetTop = when (state.phase) {
-        TabataPhase.PREPARE -> PhaseColors.Prepare
-        TabataPhase.WORK    -> PhaseColors.Work
-        TabataPhase.REST    -> PhaseColors.Rest
-        TabataPhase.DONE    -> PhaseColors.Done
-    }
-    val targetBot = when (state.phase) {
-        TabataPhase.PREPARE -> PhaseColors.PrepareDark
-        TabataPhase.WORK    -> PhaseColors.WorkDark
-        TabataPhase.REST    -> PhaseColors.RestDark
-        TabataPhase.DONE    -> PhaseColors.DoneDark
-    }
+    val (targetTop, targetBot) = state.phase.gradientColors()
     val topColor by animateColorAsState(targetTop, tween(500), label = "top")
     val botColor by animateColorAsState(targetBot, tween(500), label = "bot")
 
@@ -185,7 +174,6 @@ private fun TimerContentPortrait(
     onResume     : () -> Unit,
     onReset      : () -> Unit
 ) {
-    // fillMaxSize Box provides the BoxScope needed to centre the Column.
     Box(
         modifier         = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -248,7 +236,6 @@ private fun TimerContentLandscape(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment     = Alignment.CenterVertically
     ) {
-        // Left: arc + countdown number
         Box(
             contentAlignment = Alignment.Center,
             modifier         = Modifier.weight(1f)
@@ -262,7 +249,6 @@ private fun TimerContentLandscape(
             )
         }
 
-        // Right: phase label, pips, labels, controls
         Column(
             modifier            = Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -458,13 +444,16 @@ private fun RoundPips(
     currentRound : Int,
     active       : Boolean
 ) {
+    val maxVisible = 20
+    val showOverflow = total > maxVisible
+    val displayCount = if (showOverflow) maxVisible else total
     val dotSize    = if (total <= 12) 10.dp else 7.dp
     val dotSpacing = if (total <= 12) 6.dp  else 4.dp
     Row(
         horizontalArrangement = Arrangement.spacedBy(dotSpacing),
         verticalAlignment     = Alignment.CenterVertically
     ) {
-        for (i in 1..minOf(total, 20)) {
+        for (i in 1..displayCount) {
             val isDone    = active && i < currentRound
             val isCurrent = active && i == currentRound
             Box(
@@ -478,6 +467,13 @@ private fun RoundPips(
                             else      -> Color.White.copy(alpha = 0.18f)
                         }
                     )
+            )
+        }
+        if (showOverflow) {
+            Text(
+                text  = "\u2026",
+                color = Color.White.copy(alpha = 0.45f),
+                style = MaterialTheme.typography.bodySmall
             )
         }
     }

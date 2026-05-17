@@ -15,8 +15,14 @@ data class TabataSettings(
     val rounds:      Int = 8,
     val sets:        Int = 1
 ) {
-    /** Total workout duration in seconds, excluding prepare phase. */
-    fun totalWorkoutSecs(): Int = sets * rounds * (workSecs + restSecs) - restSecs
+    /**
+     * Total workout duration in seconds, excluding the prepare phase.
+     *
+     * Each set consists of [rounds] work intervals separated by ([rounds]-1)
+     * rest intervals (the last round of every set has no trailing rest).
+     */
+    fun totalWorkoutSecs(): Int =
+        sets * (rounds * workSecs + (rounds - 1) * restSecs)
 
     companion object {
         // Hard limits — wider than any UI slider but safe from overflow.
