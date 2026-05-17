@@ -45,8 +45,18 @@ class TabataForegroundService : Service() {
         const val EXTRA_ROUND         = "extra_round"
     }
 
+    // Cached once in onCreate() — no need to rebuild on every startService() call.
+    private lateinit var openIntent: PendingIntent
+
     override fun onCreate() {
         super.onCreate()
+        openIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         createNotificationChannel()
     }
 
@@ -69,13 +79,6 @@ class TabataForegroundService : Service() {
     }
 
     private fun buildNotification(phase: String, secondsLeft: Int, round: Int): Notification {
-        val openIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-            },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_timer_notification)
             .setContentTitle("Tabata — $phase")
