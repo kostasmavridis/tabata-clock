@@ -55,9 +55,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-    }
+
     buildFeatures {
         compose     = true
         buildConfig = true   // required for BuildConfig.DEBUG in SettingsScreen
@@ -73,6 +71,15 @@ android {
         unitTests.all {
             it.useJUnitPlatform()
         }
+    }
+}
+
+// Top-level kotlin {} block — provided by the kotlin-android plugin.
+// This is the correct replacement for the deprecated kotlinOptions DSL
+// in Kotlin 2.3.x. See https://kotl.in/u1r8ln
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
