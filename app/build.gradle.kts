@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
-    // kotlin.android is replaced by AGP 9 built-in Kotlin (android.builtInKotlin=true).
-    // kotlin.compose is wired automatically by built-in Kotlin when compose = true.
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
     alias(libs.plugins.android.junit5)
@@ -20,7 +20,6 @@ android {
         versionName = "1.0.0"
     }
 
-    // Read signing config from environment variables (set by CI) or local.properties (local dev)
     val keystorePath     = System.getenv("KEYSTORE_PATH")
     val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
     val keyAlias         = System.getenv("KEY_ALIAS")
@@ -53,6 +52,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlin {
+        jvmToolchain(17)
     }
 
     buildFeatures {
