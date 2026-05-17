@@ -23,7 +23,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+@Suppress("DEPRECATION")
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kostasmavridis.tabataclock.model.TabataPhase
 import com.kostasmavridis.tabataclock.ui.theme.PhaseColors
@@ -37,7 +38,6 @@ fun TimerScreen(
     val state    by viewModel.timerState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    // ── Phase colours ────────────────────────────────────────────────────────────────────────
     val targetTop = when (state.phase) {
         TabataPhase.PREPARE -> PhaseColors.Prepare
         TabataPhase.WORK    -> PhaseColors.Work
@@ -53,14 +53,12 @@ fun TimerScreen(
     val topColor by animateColorAsState(targetTop, tween(500), label = "top")
     val botColor by animateColorAsState(targetBot, tween(500), label = "bot")
 
-    // ── Progress arc ──────────────────────────────────────────────────────────────────────
     val arcProgress by animateFloatAsState(
         targetValue    = state.phaseProgress,
         animationSpec  = tween(900, easing = LinearEasing),
         label          = "arc"
     )
 
-    // ── Pulse glow when running ─────────────────────────────────────────────────────────────
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by pulseAnim.animateFloat(
         initialValue   = 0.15f,
@@ -80,7 +78,6 @@ fun TimerScreen(
                 brush = Brush.verticalGradient(listOf(topColor, botColor))
             )
     ) {
-        // Settings icon
         IconButton(
             onClick = onNavigateToSettings,
             modifier = Modifier
@@ -101,7 +98,6 @@ fun TimerScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            // Phase label with letter-spacing
             Text(
                 text  = state.phase.label.uppercase(),
                 style = MaterialTheme.typography.headlineSmall.copy(
@@ -113,7 +109,6 @@ fun TimerScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // ── Countdown circle ───────────────────────────────────────────────────────────────────────
             Box(
                 modifier = Modifier
                     .size(260.dp)
@@ -124,7 +119,6 @@ fun TimerScreen(
                         val arcSize    = Size(size.width - stroke, size.height - stroke)
                         val topLeft    = Offset(inset, inset)
                         onDrawBehind {
-                            // Glow ring (pulse when running)
                             drawArc(
                                 color      = Color.White.copy(alpha = glowAlpha),
                                 startAngle = -90f,
@@ -134,7 +128,6 @@ fun TimerScreen(
                                 size       = arcSize,
                                 style      = Stroke(width = glowStroke, cap = StrokeCap.Round)
                             )
-                            // Track
                             drawArc(
                                 color      = Color.White.copy(alpha = 0.12f),
                                 startAngle = -90f,
@@ -144,7 +137,6 @@ fun TimerScreen(
                                 size       = arcSize,
                                 style      = Stroke(width = stroke, cap = StrokeCap.Round)
                             )
-                            // Progress
                             drawArc(
                                 color      = Color.White.copy(alpha = 0.90f),
                                 startAngle = -90f,
@@ -183,7 +175,6 @@ fun TimerScreen(
 
             Spacer(Modifier.height(20.dp))
 
-            // Round pips
             RoundPips(
                 total        = settings.rounds,
                 currentRound = state.currentRound,
@@ -207,12 +198,10 @@ fun TimerScreen(
 
             Spacer(Modifier.height(44.dp))
 
-            // Controls
             Row(
                 horizontalArrangement = Arrangement.spacedBy(28.dp),
                 verticalAlignment     = Alignment.CenterVertically
             ) {
-                // Reset
                 IconButton(
                     onClick  = { viewModel.reset() },
                     modifier = Modifier
@@ -228,7 +217,6 @@ fun TimerScreen(
                     )
                 }
 
-                // Play / Pause FAB
                 FloatingActionButton(
                     onClick = {
                         when {
@@ -254,7 +242,6 @@ fun TimerScreen(
     }
 }
 
-/** Small coloured dot per round — filled for completed, outlined for upcoming. */
 @Composable
 private fun RoundPips(
     total:        Int,
