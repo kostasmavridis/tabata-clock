@@ -9,6 +9,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import com.kostasmavridis.tabataclock.R
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
@@ -20,8 +21,6 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
             AudioAttributes.Builder()
                 // USAGE_MEDIA: routes to the Media volume slider and is
                 // correctly directed to sport Bluetooth headphones.
-                // Previously USAGE_ASSISTANCE_SONIFICATION which routes to
-                // Accessibility/Ring volume — wrong for a fitness timer.
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
@@ -40,6 +39,10 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
     private val totalSounds = 4
     @Volatile private var loaded = false
 
+    // Pending play requests fired before all sounds were ready.
+    // Each entry is a lambda that calls soundPool.play() with the correct soundId.
+    private val pendingPlays = ConcurrentLinkedQueue<() -> Unit>()
+
     private val vibrator: Vibrator by lazy {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -54,6 +57,10 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
         soundPool.setOnLoadCompleteListener { _, _, status ->
             if (status == 0 && loadedCount.incrementAndGet() == totalSounds) {
                 loaded = true
+                // Drain any play() calls that arrived before we were ready.
+                while (pendingPlays.isNotEmpty()) {
+                    pendingPlays.poll()?.invoke()
+                }
             }
         }
         try {
@@ -72,7 +79,18 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
     override fun playDone() = play(doneId, shortVibrate = true)
 
     private fun play(soundId: Int, shortVibrate: Boolean) {
-        if (loaded && soundId != 0) soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
+        if (soundId == 0) return
+        if (loaded) {
+            soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
+        } else {
+            // Queue the request — will be replayed once onLoadCompleteListener
+            // fires for the last sound. Only queue one pending play per sound to
+            // avoid stacking up multiple beeps if the timer fires rapidly before load.
+            val alreadyQueued = pendingPlays.any { it.javaClass == soundId.javaClass }
+            if (!alreadyQueued) {
+                pendingPlays.offer { soundPool.play(soundId, 1f, 1f, 1, 0, 1f) }
+            }
+        }
         if (shortVibrate) vibrate()
     }
 
@@ -81,5 +99,8 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
         vibrator.vibrate(effect)
     }
 
-    override fun release() = soundPool.release()
+    override fun release() {
+        pendingPlays.clear()
+        soundPool.release()
+    }
 }
