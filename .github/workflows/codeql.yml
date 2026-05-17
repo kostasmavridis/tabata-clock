@@ -60,7 +60,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ── Python: generate sound WAV files ────────────────────────────
+      # ── Python: generate sound WAV files ────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -69,17 +69,17 @@ jobs:
       - name: Generate sound files
         run: python scripts/generate_sounds.py
 
-      # ── Java ─────────────────────────────────────────────────────
+      # ── Java ─────────────────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # ── Bootstrap Gradle wrapper JAR ───────────────────────────────────
+      # ── Bootstrap Gradle wrapper JAR ─────────────────────────────────────────
       - name: Bootstrap Gradle wrapper JAR
         run: |
-          GRADLE_VERSION=8.14.1
+          GRADLE_VERSION=8.14.5
           curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
                -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
@@ -88,11 +88,11 @@ jobs:
             --distribution-type bin
           chmod +x gradlew
 
-      # ── Decode keystore ─────────────────────────────────────────
+      # ── Decode keystore ──────────────────────────────────────────────────────
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/tabata-release.keystore
 
-      # ── Initialise CodeQL ──────────────────────────────────────────
+      # ── Initialise CodeQL ────────────────────────────────────────────────────
       - name: Initialise CodeQL
         uses: github/codeql-action/init@v4
         with:
@@ -107,7 +107,7 @@ jobs:
               - "**/*Hilt_*"
               - "**/ComposableSingletons*"
 
-      # ── Build (CodeQL traces this for Kotlin extraction) ─────────────────
+      # ── Build (CodeQL traces this for Kotlin extraction) ─────────────────────
       - name: Build (CodeQL extraction)
         env:
           KEYSTORE_PATH: tabata-release.keystore
@@ -116,7 +116,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleDebug --stacktrace
 
-      # ── Analyse ──────────────────────────────────────────────────────
+      # ── Analyse ──────────────────────────────────────────────────────────────
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
         with:
