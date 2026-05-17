@@ -284,11 +284,10 @@ class TabataViewModelTest {
             val twoSets = fastSettings.copy(sets = 2)
             repo.flow.value = twoSets
             vm.reset()
-            // ViewModel runs: PREPARE + for each (set, round): WORK + REST (except last round)
             // sets=2, rounds=2, work=4, rest=2:
-            //   prepare(3) + work(4)+rest(2) + work(4)+rest(2) + work(4)+rest(2) + work(4)
-            //   = 3 + 4*4 + 3*2 = 3 + 16 + 6 = 25s
-            // Formula: prepare + sets*rounds*work + (sets*rounds - 1)*rest
+            // PREPARE(3) + [WORK(4)+REST(2)] * (sets*rounds - 1) + WORK(4)
+            // = 3 + (4+2)*3 + 4 = 3 + 18 + 4 = 25s
+            // Formula: prepareSecs + sets*rounds*workSecs + (sets*rounds-1)*restSecs
             val totalMs = (twoSets.prepareSecs +
                 twoSets.sets * twoSets.rounds * twoSets.workSecs +
                 (twoSets.sets * twoSets.rounds - 1) * twoSets.restSecs) * 1_000L
@@ -385,7 +384,8 @@ class TabataViewModelTest {
         @Test
         @DisplayName("totalWorkoutSecs excludes trailing rest")
         fun `totalWorkoutSecs is correct for fastSettings`() {
-            // sets=1, rounds=2, work=4, rest=2: 1*2*(4+2) - 2 = 12 - 2 = 10s
+            // sets=1, rounds=2, work=4, rest=2:
+            // 1 * (2*4 + (2-1)*2) = 1 * (8 + 2) = 10s
             assertEquals(10, fastSettings.totalWorkoutSecs())
         }
 
@@ -397,16 +397,21 @@ class TabataViewModelTest {
         )
         @DisplayName("totalWorkoutSecs parametrized by round count")
         fun `totalWorkoutSecs parametrized`(rounds: Int, expected: Int) {
+            // Formula: sets * (rounds * workSecs + (rounds-1) * restSecs)
+            // rounds=1: 1*(1*4 + 0*2) = 4
+            // rounds=2: 1*(2*4 + 1*2) = 10
+            // rounds=3: 1*(3*4 + 2*2) = 16
             assertEquals(expected, fastSettings.copy(rounds = rounds).totalWorkoutSecs())
         }
 
         @Test
         @DisplayName("totalWorkoutSecs scales correctly with multiple sets")
         fun `totalWorkoutSecs with two sets`() {
-            // sets=2, rounds=2, work=4, rest=2
-            // Formula: sets * rounds * (work + rest) - rest = 2*2*(4+2) - 2 = 24 - 2 = 22
+            // sets=2, rounds=2, work=4, rest=2:
+            // 2 * (2*4 + (2-1)*2) = 2 * (8 + 2) = 20s
+            // Note: each SET ends without a trailing rest, not just the final round globally.
             val s = fastSettings.copy(sets = 2)
-            assertEquals(22, s.totalWorkoutSecs())
+            assertEquals(20, s.totalWorkoutSecs())
         }
     }
 }

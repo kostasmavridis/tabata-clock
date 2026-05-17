@@ -32,8 +32,12 @@ class TabataViewModel @Inject constructor(
 ) : AndroidViewModel(application) {
 
     // ── Settings ─────────────────────────────────────────────────────────
+    // repo.settingsFlow is already a StateFlow (guaranteed by ISettingsRepository).
+    // Re-sharing it in viewModelScope allows the ViewModel to control the sharing
+    // lifetime (tied to the ViewModel, not the repository scope) while still
+    // exposing a StateFlow with a synchronously readable .value.
     val settings: StateFlow<TabataSettings> = repo.settingsFlow
-        .stateIn(viewModelScope, SharingStarted.Eagerly, TabataSettings())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repo.settingsFlow.value)
 
     fun updateSettings(s: TabataSettings) {
         viewModelScope.launch { repo.saveSettings(s) }
@@ -57,8 +61,8 @@ class TabataViewModel @Inject constructor(
 
     private val _timerState = MutableStateFlow(
         TimerState(
-            secondsLeft       = settings.value.prepareSecs,
-            phaseDurationSecs = settings.value.prepareSecs
+            secondsLeft       = repo.settingsFlow.value.prepareSecs,
+            phaseDurationSecs = repo.settingsFlow.value.prepareSecs
         )
     )
     val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
@@ -66,15 +70,6 @@ class TabataViewModel @Inject constructor(
     private var timerJob: Job? = null
 
     // ── Lifecycle callbacks ───────────────────────────────────────────
-
-    /**
-     * Called from [MainActivity.onResume] every time the app returns to the
-     * foreground. Rebuilds the SoundPool so that native AudioTrack sessions
-     * invalidated by OEM memory management are transparently restored.
-     *
-     * Skipped while the timer is actively running to avoid a brief audio gap
-     * if the user switches apps and immediately returns mid-workout.
-     */
     fun onAppForegrounded() {
         if (!_timerState.value.isRunning) {
             soundManager.reinitialise()
@@ -107,8 +102,6 @@ class TabataViewModel @Inject constructor(
     fun reset() {
         timerJob?.cancel()
         serviceNotifier.stop()
-        // Read from the in-memory StateFlow (SharingStarted.Eagerly guarantees
-        // it always has a current value) — no blocking I/O needed.
         val prepareSecs = settings.value.prepareSecs
         _timerState.value = TimerState(
             secondsLeft       = prepareSecs,
