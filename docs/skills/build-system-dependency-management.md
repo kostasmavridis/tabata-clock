@@ -1,13 +1,13 @@
 ---
 name: build-system-dependency-management
-description: "Gradle Version Catalog, AGP lifecycle, KSP2, R8/ProGuard, source-set isolation, and Maven artifact verification for Tabata Clock."
+description: "Gradle Version Catalog, AGP lifecycle and plugin matrix, KSP vs KAPT, R8/ProGuard, source-set isolation, BOM scope, and Maven artifact verification for Tabata Clock."
 ---
 
 ## Build System & Dependency Management
 
 This is the highest-risk domain in the project. Every major incident in the
-project's history has originated here. Read this skill carefully before touching
-any version, plugin, or build configuration.
+project's history originated here. Read every section before touching any version,
+plugin, or build configuration.
 
 ---
 
@@ -22,12 +22,12 @@ any version, plugin, or build configuration.
 ```toml
 # gradle/libs.versions.toml — correct
 [versions]
-agp = "8.10.1"
-kotlin = "2.1.21"
+agp     = "8.10.1"
+kotlin  = "2.1.21"
 
 [plugins]
-android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+android-application = { id = "com.android.application",      version.ref = "agp"    }
+kotlin-android      = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 ```
 
 ```kotlin
@@ -40,35 +40,47 @@ plugins {
 
 ---
 
-### AGP Lifecycle & Plugin Ownership
+### AGP Lifecycle & Plugin Matrix
 
 > **Lesson that must not be relearned:** When AGP takes ownership of a compilation
-> step, the old plugin providing that step becomes **actively forbidden**, not
-> silently redundant. It will hard-fail.
+> step, the old plugin that provided that step becomes **actively forbidden**,
+> not silently redundant. It will hard-fail.
 
 - Before any major AGP bump, read the migration guide section titled
   *"What this version now owns"* and identify which plugins must be removed.
-- AGP 9+ owns the `kotlin.android` compilation step.
-  The `kotlin.android` plugin is **removed**, but `kotlin.compose` remains required.
+- **AGP 9+:** owns the `kotlin.android` compilation step.
+  The `kotlin.android` plugin is **removed**; `kotlin.compose` remains required.
 - Verify each concern independently after a major AGP upgrade:
   compilation ✓, annotation processing ✓, each compiler plugin ✓.
+- Understand the full plugin matrix for this project:
+
+| Plugin | AGP < 9 | AGP 9+ |
+|---|---|---|
+| `kotlin.android` | Required | **Forbidden** |
+| `kotlin.compose` | Required | Required |
+| `com.google.devtools.ksp` | Required | Required |
+| `dagger.hilt.android.plugin` | Required | Required |
+| `org.jetbrains.kotlinx.kover` | Required | Verify compatibility |
 
 ---
 
-### KSP2 — Annotation Processing
+### KSP vs KAPT
 
-- The project is fully on KSP2. KAPT is not used and must not be introduced.
-- KSP version coupling: before KSP 2.3.0, the KSP version had to match the
-  Kotlin version (e.g. `2.1.21-2.0.1`). From KSP 2.3.0+ the versions are
-  standalone. Check the current scheme before upgrading.
-- Hilt runs through KSP2. The `ksp` configuration is used, not `kapt`.
+- The project is **fully on KSP2**. KAPT is not used and must not be introduced.
+- **KGP–KSP version coupling (pre-2.3.0):** before KSP 2.3.0, the KSP version had
+  to embed the Kotlin version (e.g. `2.1.21-2.0.1`). The format is
+  `{kotlinVersion}-{kspSuffix}`.
+- **KSP 2.3.0+:** versions are standalone and no longer coupled to Kotlin's version.
+  When a bump fails with "artifact not found", check whether the versioning scheme
+  changed before assuming the version number is simply wrong.
+- Hilt uses the `ksp` configuration, not `kapt`:
 
-```toml
-[versions]
-ksp = "2.1.21-2.0.1"   # format: kotlinVersion-kspSuffix (pre-2.3.0)
-
-[plugins]
-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+```kotlin
+// app/build.gradle.kts — correct
+dependencies {
+    ksp(libs.hilt.compiler)          // ✓ KSP
+    // kapt(libs.hilt.compiler)      // ✗ KAPT — do not use
+}
 ```
 
 ---
@@ -82,39 +94,56 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 android {
     buildFeatures {
         buildConfig = true
-        compose = true
+        compose     = true
     }
 }
 ```
 
 - `BuildConfig` requires an explicit import in Kotlin:
   `import com.kostasmavridis.tabataclock.BuildConfig`
-- Debug-only classes (e.g. `LogExporter`) must never be called from the `main`
-  source set via FQN. Use the dual source-set pattern:
-  - `main`: interface only (e.g. `DebugActions`)
-  - `debug`: `RealDebugActions` implementing the interface
-  - `release`: `NoOpDebugActions` with empty stubs
+- **Source-set isolation rule:** debug-only classes (e.g. `LogExporter`) must never
+  be called from the `main` source set via FQN. The release compiler correctly
+  rejects this because debug classes do not exist in the release classpath.
+  Use the dual source-set pattern:
+  - `main` → interface only (e.g. `DebugActions`)
+  - `debug` → `RealDebugActions` implementing the interface
+  - `release` → `NoOpDebugActions` with empty stubs
+
+```kotlin
+// main/DebugActions.kt
+interface DebugActions {
+    fun exportLog()
+}
+
+// debug/RealDebugActions.kt
+class RealDebugActions : DebugActions {
+    override fun exportLog() = LogExporter.export()  // debug-only class: safe here
+}
+
+// release/NoOpDebugActions.kt
+class NoOpDebugActions : DebugActions {
+    override fun exportLog() = Unit  // release compiler never sees LogExporter
+}
+```
 
 ---
 
 ### BOM Scope Gotcha
 
-A BOM in `implementation` constrains `implementation` dependencies **only**.
+A BOM placed in `implementation` constrains **only** `implementation` dependencies.
 It does **not** constrain `debugImplementation`, `testImplementation`, or
-`androidTestImplementation`. Pin those explicitly.
+`androidTestImplementation`. Pin those configurations explicitly in the catalog.
 
 ```kotlin
-// Wrong: assumes BOM constrains debugImplementation
+// Wrong assumption: BOM constrains all configurations
 dependencies {
     implementation(platform(libs.compose.bom))
-    debugImplementation(libs.compose.ui.tooling) // version NOT constrained by BOM
+    debugImplementation(libs.compose.ui.tooling)  // version NOT constrained by BOM
 }
 
-// Correct
-dependencies {
-    implementation(platform(libs.compose.bom))
-    debugImplementation(libs.compose.ui.tooling) // explicit version in toml
-}
+// Correct: explicit version via the catalog
+// In libs.versions.toml:
+// compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "compose-ui-tooling" }
 ```
 
 ---
@@ -126,10 +155,17 @@ dependencies {
 
 - Check URLs:
   - Google Maven: `https://maven.google.com/web/index.html`
-  - Maven Central: `https://central.sonatype.com/artifact/<group>/<artifact>`
-- Some libraries change their versioning scheme between major releases
-  (e.g. KSP moved from `kotlinVersion-suffix` to standalone). When a bump
-  fails with "artifact not found", check the scheme change before assuming
-  the version number is wrong.
-- Check interdependent groups together: annotation processor ↔ compiler ↔ runtime.
-  Upgrading one without the others can break the build in non-obvious ways.
+  - Maven Central / Sonatype: `https://central.sonatype.com/artifact/<group>/<artifact>`
+- When a bump fails with "artifact not found", check whether the **versioning scheme
+  changed** before assuming the version number is wrong. This has bitten this project
+  with KSP (scheme changed at 2.3.0) and `hilt-navigation-compose` (pre-release
+  beta had a different coordinate).
+- Always check the **full toolchain compatibility matrix** before upgrading any
+  component that participates in code generation:
+  annotation processor ↔ compiler ↔ runtime ↔ generated code.
+  Upgrading one without checking the others can break the build in ways the
+  error message does not make obvious.
+- Interdependent groups to always upgrade together:
+  - `kotlin` + `ksp` (pre-2.3.0)
+  - `hilt` + `hilt-compiler` (same version ref in toml)
+  - `kotlin` + `kotlin-compose-compiler-plugin`
