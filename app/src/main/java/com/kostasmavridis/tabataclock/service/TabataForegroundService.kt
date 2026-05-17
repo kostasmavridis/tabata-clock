@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.kostasmavridis.tabataclock.MainActivity
 import com.kostasmavridis.tabataclock.R
@@ -30,11 +31,12 @@ import com.kostasmavridis.tabataclock.R
 class TabataForegroundService : Service() {
 
     companion object {
-        const val CHANNEL_ID      = "tabata_timer_channel"
-        const val NOTIFICATION_ID = 1001
-        const val EXTRA_PHASE     = "extra_phase"
-        const val EXTRA_SECONDS   = "extra_seconds"
-        const val EXTRA_ROUND     = "extra_round"
+        private const val TAG         = "TabataFgService"
+        const val CHANNEL_ID          = "tabata_timer_channel"
+        const val NOTIFICATION_ID     = 1001
+        const val EXTRA_PHASE         = "extra_phase"
+        const val EXTRA_SECONDS       = "extra_seconds"
+        const val EXTRA_ROUND         = "extra_round"
     }
 
     override fun onCreate() {
@@ -47,7 +49,16 @@ class TabataForegroundService : Service() {
         val seconds = intent?.getIntExtra(EXTRA_SECONDS, 0) ?: 0
         val round   = intent?.getIntExtra(EXTRA_ROUND,   1) ?: 1
 
-        startForeground(NOTIFICATION_ID, buildNotification(phase, seconds, round))
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification(phase, seconds, round))
+        } catch (e: Exception) {
+            // Catches SecurityException / ForegroundServiceStartNotAllowedException
+            // on Android 13+ when POST_NOTIFICATIONS was denied after the service
+            // was already started (race condition). Stop gracefully instead of crashing.
+            Log.e(TAG, "startForeground failed — stopping service: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         // START_NOT_STICKY: the ViewModel coroutine owns timer state.
         // If Android kills this process, the ViewModel is also gone — do not
@@ -67,8 +78,8 @@ class TabataForegroundService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_timer_notification)
-            .setContentTitle("Tabata — $phase")
-            .setContentText("$secondsLeft s  •  Round $round")
+            .setContentTitle("Tabata \u2014 $phase")
+            .setContentText("$secondsLeft s  \u2022  Round $round")
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(openIntent)
