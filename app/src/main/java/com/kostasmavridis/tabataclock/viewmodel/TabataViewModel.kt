@@ -32,10 +32,6 @@ class TabataViewModel @Inject constructor(
 ) : AndroidViewModel(application) {
 
     // ── Settings ─────────────────────────────────────────────────────────
-    // repo.settingsFlow is already a StateFlow (guaranteed by ISettingsRepository).
-    // Re-sharing it in viewModelScope allows the ViewModel to control the sharing
-    // lifetime (tied to the ViewModel, not the repository scope) while still
-    // exposing a StateFlow with a synchronously readable .value.
     val settings: StateFlow<TabataSettings> = repo.settingsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, repo.settingsFlow.value)
 
@@ -43,7 +39,7 @@ class TabataViewModel @Inject constructor(
         viewModelScope.launch { repo.saveSettings(s) }
     }
 
-    // ── Timer State ───────────────────────────────────────────────────
+    // ── Timer State ───────────────────────────────────────────────────────
     data class TimerState(
         val phase: TabataPhase = TabataPhase.PREPARE,
         val secondsLeft: Int = 0,
@@ -51,7 +47,12 @@ class TabataViewModel @Inject constructor(
         val currentRound: Int = 1,
         val currentSet: Int = 1,
         val isRunning: Boolean = false,
-        val isPaused: Boolean = false
+        val isPaused: Boolean = false,
+        /**
+         * Number of WORK rounds fully completed across all sets so far.
+         * Used by the "Total X/Y" meta chip in the UI.
+         */
+        val totalRoundsCompleted: Int = 0
     ) {
         /** 0.0 (phase start) → 1.0 (phase end) */
         val phaseProgress: Float
@@ -69,7 +70,10 @@ class TabataViewModel @Inject constructor(
 
     private var timerJob: Job? = null
 
-    // ── Lifecycle callbacks ───────────────────────────────────────────
+    // Tracks whether skip() was called so runPhase can exit early.
+    @Volatile private var skipRequested = false
+
+    // ── Lifecycle callbacks ───────────────────────────────────────────────
     fun onAppForegrounded() {
         if (!_timerState.value.isRunning) {
             soundManager.reinitialise()
@@ -101,6 +105,7 @@ class TabataViewModel @Inject constructor(
 
     fun reset() {
         timerJob?.cancel()
+        skipRequested = false
         serviceNotifier.stop()
         val prepareSecs = settings.value.prepareSecs
         _timerState.value = TimerState(
@@ -109,7 +114,17 @@ class TabataViewModel @Inject constructor(
         )
     }
 
-    // ── Cycle Logic ─────────────────────────────────────────────────────
+    /**
+     * Immediately ends the current phase and advances to the next one.
+     * No-op when not running or already on DONE.
+     */
+    fun skip() {
+        if (!_timerState.value.isRunning) return
+        if (_timerState.value.phase == TabataPhase.DONE) return
+        skipRequested = true
+    }
+
+    // ── Cycle Logic ──────────────────────────────────────────────────────
     private suspend fun runTabataCycle() {
         val s = repo.settingsFlow.first()
         runPhase(TabataPhase.PREPARE, s.prepareSecs, s.prepareSecs)
@@ -118,6 +133,11 @@ class TabataViewModel @Inject constructor(
                 _timerState.update { it.copy(currentRound = round, currentSet = set) }
                 soundManager.playWork()
                 runPhase(TabataPhase.WORK, s.workSecs, s.workSecs)
+                // Increment completed count after each WORK phase finishes
+                // (whether it finished naturally or via skip).
+                _timerState.update {
+                    it.copy(totalRoundsCompleted = it.totalRoundsCompleted + 1)
+                }
                 val isLastRound = set == s.sets && round == s.rounds
                 if (!isLastRound) {
                     soundManager.playRest()
@@ -139,6 +159,10 @@ class TabataViewModel @Inject constructor(
 
     private suspend fun runPhase(phase: TabataPhase, durationSecs: Int, totalSecs: Int) {
         for (remaining in durationSecs downTo 1) {
+            if (skipRequested) {
+                skipRequested = false
+                return
+            }
             val state = _timerState.updateAndGet {
                 it.copy(
                     phase             = phase,
@@ -150,6 +174,7 @@ class TabataViewModel @Inject constructor(
             if (remaining <= 3) soundManager.playBeep()
             delay(1_000L)
         }
+        skipRequested = false
     }
 
     override fun onCleared() {
