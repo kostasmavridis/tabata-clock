@@ -17,6 +17,22 @@ import com.kostasmavridis.tabataclock.R
  *
  * The ViewModel drives all timer logic; this service exists solely to post a
  * persistent notification so Android won't kill the process.
+ *
+ * foregroundServiceType = mediaPlayback:
+ *   The service plays audio cues during workout phases. This type requires only
+ *   FOREGROUND_SERVICE_MEDIA_PLAYBACK — no sensor permissions needed.
+ *   The 'health' type was incorrect as it mandates ACTIVITY_RECOGNITION /
+ *   BODY_SENSORS / HIGH_SAMPLING_RATE_SENSORS (Android 14+).
+ *
+ * Start it when the user presses Play; stop it on Reset or when the cycle completes.
+ *
+ * Lifecycle notes
+ * ───────────────
+ * Returns START_NOT_STICKY: the ViewModel owns all timer state via a coroutine
+ * running inside viewModelScope. If Android kills the process, both the ViewModel
+ * coroutine and this service are destroyed together. There is nothing to re-display,
+ * so the service must NOT be auto-restarted with a null Intent (which is what
+ * START_STICKY would do, resulting in a stale notification).
  */
 class TabataForegroundService : Service() {
 
@@ -29,6 +45,7 @@ class TabataForegroundService : Service() {
         const val EXTRA_ROUND         = "extra_round"
     }
 
+    // Cached once in onCreate() — no need to rebuild on every startService() call.
     private lateinit var openIntent: PendingIntent
 
     override fun onCreate() {
