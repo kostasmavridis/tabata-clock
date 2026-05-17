@@ -18,11 +18,11 @@ Built with Kotlin · Jetpack Compose · MVVM · Hilt · Coroutines
 [![Latest Release](https://img.shields.io/github/v/release/kostasmavridis/tabata-clock?label=latest&color=0D47A1&logo=android)](https://github.com/kostasmavridis/tabata-clock/releases/latest)
 
 ### Stack
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.1.21-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Jetpack Compose BOM](https://img.shields.io/badge/Compose%20BOM-2025.11.00-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.2.21-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Jetpack Compose BOM](https://img.shields.io/badge/Compose%20BOM-2026.05.00-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Hilt](https://img.shields.io/badge/Hilt-2.57.2-FF6F00?logo=google&logoColor=white)](https://dagger.dev/hilt/)
 [![Min SDK](https://img.shields.io/badge/Min%20SDK-26%20(Android%208.0)-brightgreen?logo=android)](https://developer.android.com/about/versions/oreo)
-[![Target SDK](https://img.shields.io/badge/Target%20SDK-35%20(Android%2015)-brightgreen?logo=android)](https://developer.android.com/about/versions/15)
+[![Target SDK](https://img.shields.io/badge/Target%20SDK-36%20(Android%2016)-brightgreen?logo=android)](https://developer.android.com/about/versions/16)
 
 ### Community
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -71,7 +71,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 
 | Layer | Technology | Notes |
 |---|---|---|
-| Language | **Kotlin 2.1.21** | `data class`, coroutines, extension functions |
+| Language | **Kotlin 2.2.21** | `data class`, coroutines, extension functions |
 | UI | **Jetpack Compose + Material 3** | Declarative, no XML layouts |
 | Architecture | **MVVM + StateFlow** | Single source of truth in ViewModel |
 | Timer Engine | **Coroutines** (`viewModelScope`) | Leak-safe; no `CountDownTimer` or `Handler` |
@@ -87,7 +87,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 | Coverage | **Kover 0.9.8** | XML + HTML reports |
 | CI | **GitHub Actions** | Python sounds → tests → coverage → APK (path-filtered; skips doc-only commits) |
 
-> **Planned upgrade:** AGP 9 + Kotlin 2.3 + KSP2 + Gradle 9 will be done as a coordinated bundle once Hilt confirms full KSP2 compatibility. Kotlin 2.3 drops KSP1 support, so all four must move together.
+> **Note on Kotlin versioning:** Kotlin 2.3.x writes class metadata at version 2.3.0, which Hilt 2.57.2's bundled `kotlin-metadata-jvm` does not yet support (max 2.2.0). The project is pinned to **Kotlin 2.2.21 + KSP 2.2.21-2.0.5** until a Hilt release ships with a compatible `kotlin-metadata-jvm`. The upgrade to Kotlin 2.3.x will be done as a coordinated bundle with the next compatible Hilt release.
 
 ---
 
@@ -138,6 +138,7 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 - **`foregroundServiceType="mediaPlayback"`** — `health` type was incorrect; Android 14 enforces that `health` services hold a sensor permission (`ACTIVITY_RECOGNITION`, `BODY_SENSORS`, or `HIGH_SAMPLING_RATE_SENSORS`). A Tabata timer plays audio cues — `mediaPlayback` is semantically correct and requires no sensor permissions.
 - **SoundPool pending-play queue** — `SoundPool` decodes audio asynchronously after `load()`. Play calls fired before all four sounds are ready are queued in a `ConcurrentLinkedQueue` and drained in `onLoadCompleteListener`, preventing silent dropped beeps on cold start.
 - **No `gradle-wrapper.jar` in version control** — the GitHub Contents API silently corrupts binary files pushed through it. CI bootstraps the JAR by downloading the official Gradle distribution and running `gradle wrapper` on every build.
+- **Compose BOM scoped to all configurations** — `platform(libs.androidx.compose.bom)` is declared for both `implementation` and `debugImplementation` so that debug-only Compose libraries (e.g. `ui-tooling`) resolve their version from the BOM correctly.
 
 ---
 
@@ -215,7 +216,7 @@ tabata-clock/
 |---|---|
 | Android Studio | Ladybug 2024.2+ |
 | JDK | 17 |
-| Android SDK | 35 |
+| Android SDK | 36 |
 | Python | 3.8+ (for sound generation) |
 | Gradle | 8.14.1 (wrapper auto-downloads) |
 

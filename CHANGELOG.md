@@ -22,8 +22,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   with a `Collections.synchronizedSet<Int>` tracking pending soundIds directly.
 
 ### Planned
-- Coordinated upgrade bundle: AGP 9 + Kotlin 2.3 + KSP2 + Gradle 9  
-  _(deferred until Hilt confirms full KSP2 compatibility; Kotlin 2.3 drops KSP1 support)_
+- Upgrade to Kotlin 2.3.x + KSP2 as a coordinated bundle, deferred until Hilt
+  ships a `kotlin-metadata-jvm` version that supports metadata 2.3.0.
+  (Hilt 2.57.2 caps at metadata 2.2.0; Kotlin 2.3.x writes 2.3.0.)
+
+---
+
+## [1.2.0] — 2026-05-17
+
+### Fixed
+- **`hiltViewModel` deprecation warning** — updated import from
+  `androidx.hilt.navigation.compose` to `androidx.hilt.lifecycle.viewmodel.compose`
+  in `TimerScreen.kt` and `SettingsScreen.kt`.
+- **`ui-tooling` dependency resolution failure** — added
+  `debugImplementation(platform(libs.androidx.compose.bom))` to `app/build.gradle.kts`
+  so that debug-scoped Compose libraries have a BOM version anchor.
+- **`compilerOptions` block placement** — moved from inside `android {}` to the
+  top-level `kotlin {}` extension block for AGP 8.10.x / Kotlin 2.2.x compatibility.
+- **Kotlin downgraded 2.3.21 → 2.2.21** — Hilt 2.57.2's bundled `kotlin-metadata-jvm`
+  supports a maximum metadata version of 2.2.0; Kotlin 2.3.x writes version 2.3.0,
+  causing `hiltJavaCompileDebug` to fail with `IllegalArgumentException`.
+
+### Changed
+- **Kotlin** `2.1.21` → `2.2.21`.
+- **KSP** `2.1.21-2.0.1` → `2.2.21-2.0.5` (paired release for Kotlin 2.2.21).
+- **Compose BOM** `2025.11.00` → `2026.05.00` (maps to Compose `1.11.1`).
+- **`androidx.activity`** `1.10.1` → `1.13.0`.
+- **JUnit 5 (Jupiter)** `5.13.1` → `5.13.4`.
+- **`junit-platform-launcher`** `1.13.1` → `1.13.4` (kept in sync with Jupiter).
+- **`actions/upload-artifact`** `v4.6.2` → `v7.0.1` in `build.yml` — eliminates
+  `DEP0169 url.parse()` Node.js deprecation warning from artifact upload steps.
+- **Target SDK** `35` → `36`.
 
 ---
 
@@ -107,6 +136,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - CodeQL static analysis (`codeql.yml`): weekly + every push/PR to `main`.
 - Architecture Decision Records (ADR-001 – ADR-008) in `docs/adr/`.
 
-[Unreleased]: https://github.com/kostasmavridis/tabata-clock/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/kostasmavridis/tabata-clock/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/kostasmavridis/tabata-clock/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/kostasmavridis/tabata-clock/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/kostasmavridis/tabata-clock/releases/tag/v1.0.0
