@@ -18,9 +18,9 @@ Built with Kotlin · Jetpack Compose · MVVM · Hilt · Coroutines
 [![Latest Release](https://img.shields.io/github/v/release/kostasmavridis/tabata-clock?label=latest&color=0D47A1&logo=android)](https://github.com/kostasmavridis/tabata-clock/releases/latest)
 
 ### Stack
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0.0-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Jetpack Compose BOM](https://img.shields.io/badge/Compose%20BOM-2024.08.00-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![Hilt](https://img.shields.io/badge/Hilt-2.51.1-FF6F00?logo=google&logoColor=white)](https://dagger.dev/hilt/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.1.21-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Jetpack Compose BOM](https://img.shields.io/badge/Compose%20BOM-2026.04.00-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
+[![Hilt](https://img.shields.io/badge/Hilt-2.57.2-FF6F00?logo=google&logoColor=white)](https://dagger.dev/hilt/)
 [![Min SDK](https://img.shields.io/badge/Min%20SDK-26%20(Android%208.0)-brightgreen?logo=android)](https://developer.android.com/about/versions/oreo)
 [![Target SDK](https://img.shields.io/badge/Target%20SDK-35%20(Android%2015)-brightgreen?logo=android)](https://developer.android.com/about/versions/15)
 
@@ -71,12 +71,12 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 
 | Layer | Technology | Notes |
 |---|---|---|
-| Language | **Kotlin 2.0** | `data class`, coroutines, extension functions |
+| Language | **Kotlin 2.1.21** | `data class`, coroutines, extension functions |
 | UI | **Jetpack Compose + Material 3** | Declarative, no XML layouts |
 | Architecture | **MVVM + StateFlow** | Single source of truth in ViewModel |
 | Timer Engine | **Coroutines** (`viewModelScope`) | Leak-safe; no `CountDownTimer` or `Handler` |
 | Persistence | **DataStore Preferences** | Async, Flow-based; replaces SharedPreferences |
-| DI | **Hilt 2.51** | Constructor injection via interfaces |
+| DI | **Hilt 2.57.2** | Constructor injection via interfaces |
 | Audio | **SoundPool** | Low-latency; play requests queued until all sounds loaded |
 | Haptics | **VibrationEffect** | API 26+, one-shot 150ms pulse |
 | Background | **Foreground Service** | `foregroundServiceType="mediaPlayback"` — no sensor permissions required |
@@ -84,8 +84,10 @@ Tabata is a high-intensity interval training (HIIT) protocol developed by Dr. Iz
 | Back gesture | **OnBackInvokedCallback** | `enableOnBackInvokedCallback="true"` — predictive back on Android 13+ |
 | Navigation | **Navigation Compose** | `Timer` ↔ `Settings` destinations |
 | Testing | **JUnit 5 + Turbine + MockK** | `StandardTestDispatcher` for virtual time |
-| Coverage | **Kover 0.8** | XML + HTML reports |
+| Coverage | **Kover 0.9.8** | XML + HTML reports |
 | CI | **GitHub Actions** | Python sounds → tests → coverage → APK (path-filtered; skips doc-only commits) |
+
+> **Planned upgrade:** AGP 9 + Kotlin 2.3 + KSP2 + Gradle 9 will be done as a coordinated bundle once Hilt confirms full KSP2 compatibility. Kotlin 2.3 drops KSP1 support, so all four must move together.
 
 ---
 
@@ -197,6 +199,7 @@ tabata-clock/
 │   └── gradle-wrapper.properties  # Gradle 8.14.1 — JAR bootstrapped by CI
 ├── build.gradle.kts
 ├── settings.gradle.kts
+├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── gradlew / gradlew.bat
 └── .gitignore
