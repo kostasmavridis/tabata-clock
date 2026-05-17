@@ -36,6 +36,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kostasmavridis.tabataclock.model.TabataPhase
+import com.kostasmavridis.tabataclock.model.accentColor
 import com.kostasmavridis.tabataclock.model.gradientColors
 import com.kostasmavridis.tabataclock.viewmodel.TabataViewModel
 import kotlinx.coroutines.launch
@@ -84,6 +85,7 @@ fun TimerScreen(
     val (targetTop, targetBot) = state.phase.gradientColors()
     val topColor by animateColorAsState(targetTop, tween(500), label = "top")
     val botColor by animateColorAsState(targetBot, tween(500), label = "bot")
+    val accent   by animateColorAsState(state.phase.accentColor(), tween(500), label = "accent")
 
     val arcProgress by animateFloatAsState(
         targetValue   = state.phaseProgress,
@@ -93,8 +95,8 @@ fun TimerScreen(
 
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by pulseAnim.animateFloat(
-        initialValue  = 0.15f,
-        targetValue   = 0.45f,
+        initialValue  = 0.20f,
+        targetValue   = 0.55f,
         animationSpec = infiniteRepeatable(
             animation  = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -102,6 +104,18 @@ fun TimerScreen(
         label = "pulseAlpha"
     )
     val glowAlpha = if (state.isRunning) pulseAlpha else 0f
+
+    // Phase-flash: fires once every time the phase changes.
+    var flashAlpha by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(state.phase) {
+        flashAlpha = 0.55f
+    }
+    val animatedFlash by animateFloatAsState(
+        targetValue   = flashAlpha,
+        animationSpec = tween(durationMillis = 450, easing = LinearOutSlowInEasing),
+        finishedListener = { flashAlpha = 0f },
+        label         = "flash"
+    )
 
     Scaffold(
         snackbarHost   = { SnackbarHost(snackbarHostState) },
@@ -119,7 +133,7 @@ fun TimerScreen(
                 TimerContentLandscape(
                     state         = state,
                     settings      = settings,
-                    topColor      = topColor,
+                    accent        = accent,
                     arcProgress   = arcProgress,
                     glowAlpha     = glowAlpha,
                     onStartTapped = ::onStartTapped,
@@ -131,7 +145,7 @@ fun TimerScreen(
                 TimerContentPortrait(
                     state         = state,
                     settings      = settings,
-                    topColor      = topColor,
+                    accent        = accent,
                     arcProgress   = arcProgress,
                     glowAlpha     = glowAlpha,
                     onStartTapped = ::onStartTapped,
@@ -141,7 +155,32 @@ fun TimerScreen(
                 )
             }
 
-            // Settings button rendered last so it draws on top of content.
+            // Phase flash overlay — radial gradient centred on screen,
+            // fades out in 450 ms after every phase transition.
+            if (animatedFlash > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    accent.copy(alpha = animatedFlash * 0.35f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+            }
+
+            // Done overlay — shown on top of everything when the session ends.
+            if (state.phase == TabataPhase.DONE) {
+                DoneOverlay(
+                    settings = settings,
+                    onRestart = { viewModel.reset() }
+                )
+            }
+
+            // Settings button — intentionally last so it renders on top.
             // top = 12.dp is intentionally less than end = 16.dp: the button
             // sits closer to the top edge for visual balance. Do not
             // "correct" this to uniform padding.
@@ -162,6 +201,75 @@ fun TimerScreen(
 }
 
 // ---------------------------------------------------------------------------
+// Done overlay
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun DoneOverlay(
+    settings  : com.kostasmavridis.tabataclock.model.TabataSettings,
+    onRestart : () -> Unit
+) {
+    val totalWorkSecs = settings.workSecs * settings.rounds * settings.sets
+    val minutes = totalWorkSecs / 60
+    val seconds = totalWorkSecs % 60
+    val accent  = TabataPhase.DONE.accentColor()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF9B59B6).copy(alpha = 0.30f),
+                        Color(0xFF06060F).copy(alpha = 0.85f)
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text     = "\uD83D\uDD25",
+                fontSize = 64.sp
+            )
+            Text(
+                text  = "Session Complete",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight    = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp
+                ),
+                color = accent
+            )
+            Text(
+                text  = "${settings.rounds * settings.sets} rounds · ${minutes}m ${seconds}s work",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.6f)
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onRestart,
+                shape   = CircleShape,
+                colors  = ButtonDefaults.buttonColors(
+                    containerColor = accent,
+                    contentColor   = Color.White
+                ),
+                modifier = Modifier.padding(horizontal = 32.dp)
+            ) {
+                Text(
+                    text       = "Start Again",
+                    fontWeight = FontWeight.Bold,
+                    fontSize   = 16.sp,
+                    modifier   = Modifier.padding(vertical = 6.dp, horizontal = 16.dp)
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Portrait layout
 // ---------------------------------------------------------------------------
 
@@ -169,7 +277,7 @@ fun TimerScreen(
 private fun TimerContentPortrait(
     state        : TabataViewModel.TimerState,
     settings     : com.kostasmavridis.tabataclock.model.TabataSettings,
-    topColor     : Color,
+    accent       : Color,
     arcProgress  : Float,
     glowAlpha    : Float,
     onStartTapped: () -> Unit,
@@ -204,12 +312,14 @@ private fun TimerContentPortrait(
                 digitSize   = 88,
                 arcProgress = arcProgress,
                 glowAlpha   = glowAlpha,
+                accent      = accent,
                 secondsLeft = state.secondsLeft
             )
             Spacer(Modifier.height(20.dp))
             RoundPips(
                 total        = settings.rounds,
                 currentRound = state.currentRound,
+                accent       = accent,
                 active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
             )
             Spacer(Modifier.height(10.dp))
@@ -218,7 +328,7 @@ private fun TimerContentPortrait(
             TimerControls(
                 isRunning     = state.isRunning,
                 isPaused      = state.isPaused,
-                topColor      = topColor,
+                accent        = accent,
                 onStartTapped = onStartTapped,
                 onPause       = onPause,
                 onResume      = onResume,
@@ -236,7 +346,7 @@ private fun TimerContentPortrait(
 private fun TimerContentLandscape(
     state        : TabataViewModel.TimerState,
     settings     : com.kostasmavridis.tabataclock.model.TabataSettings,
-    topColor     : Color,
+    accent       : Color,
     arcProgress  : Float,
     glowAlpha    : Float,
     onStartTapped: () -> Unit,
@@ -260,6 +370,7 @@ private fun TimerContentLandscape(
                 digitSize   = 64,
                 arcProgress = arcProgress,
                 glowAlpha   = glowAlpha,
+                accent      = accent,
                 secondsLeft = state.secondsLeft
             )
         }
@@ -274,6 +385,7 @@ private fun TimerContentLandscape(
             RoundPips(
                 total        = settings.rounds,
                 currentRound = state.currentRound,
+                accent       = accent,
                 active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
             )
             Spacer(Modifier.height(8.dp))
@@ -282,7 +394,7 @@ private fun TimerContentLandscape(
             TimerControls(
                 isRunning     = state.isRunning,
                 isPaused      = state.isPaused,
-                topColor      = topColor,
+                accent        = accent,
                 onStartTapped = onStartTapped,
                 onPause       = onPause,
                 onResume      = onResume,
@@ -314,6 +426,7 @@ private fun TimerArc(
     digitSize   : Int,
     arcProgress : Float,
     glowAlpha   : Float,
+    accent      : Color,
     secondsLeft : Int
 ) {
     val innerSize = arcSize - 60.dp
@@ -327,8 +440,9 @@ private fun TimerArc(
                 val arcSz      = Size(size.width - stroke, size.height - stroke)
                 val topLeft    = Offset(inset, inset)
                 onDrawBehind {
+                    // Phase-coloured glow arc — matches web ring-glow opacity
                     drawArc(
-                        color      = Color.White.copy(alpha = glowAlpha),
+                        color      = accent.copy(alpha = glowAlpha * 0.65f),
                         startAngle = -90f,
                         sweepAngle = 360f * arcProgress,
                         useCenter  = false,
@@ -336,8 +450,9 @@ private fun TimerArc(
                         size       = arcSz,
                         style      = Stroke(width = glowStroke, cap = StrokeCap.Round)
                     )
+                    // Dim track
                     drawArc(
-                        color      = Color.White.copy(alpha = 0.12f),
+                        color      = Color.White.copy(alpha = 0.07f),
                         startAngle = -90f,
                         sweepAngle = 360f,
                         useCenter  = false,
@@ -345,6 +460,7 @@ private fun TimerArc(
                         size       = arcSz,
                         style      = Stroke(width = stroke, cap = StrokeCap.Round)
                     )
+                    // Progress arc — white for contrast on any phase colour
                     drawArc(
                         color      = Color.White.copy(alpha = 0.90f),
                         startAngle = -90f,
@@ -405,7 +521,7 @@ private fun RoundSetLabels(
 private fun TimerControls(
     isRunning     : Boolean,
     isPaused      : Boolean,
-    topColor      : Color,
+    accent        : Color,
     onStartTapped : () -> Unit,
     onPause       : () -> Unit,
     onResume      : () -> Unit,
@@ -430,6 +546,8 @@ private fun TimerControls(
             )
         }
 
+        // FAB background is the phase accent gradient, matching the web
+        // .btn-primary-inner gradient. Icon is always white for contrast.
         FloatingActionButton(
             onClick = {
                 when {
@@ -438,15 +556,25 @@ private fun TimerControls(
                     else      -> onStartTapped()
                 }
             },
-            modifier       = Modifier.size(80.dp),
+            modifier       = Modifier
+                .size(80.dp)
+                .drawWithCache {
+                    onDrawBehind {
+                        drawCircle(
+                            brush = Brush.linearGradient(
+                                colors = listOf(accent, accent.copy(red = accent.red * 0.75f))
+                            )
+                        )
+                    }
+                },
             shape          = CircleShape,
-            containerColor = Color.White,
+            containerColor = Color.Transparent,
             elevation      = FloatingActionButtonDefaults.elevation(8.dp, 12.dp)
         ) {
             Icon(
                 imageVector        = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = if (isRunning) "Pause" else "Play",
-                tint               = topColor,
+                tint               = Color.White,
                 modifier           = Modifier.size(42.dp)
             )
         }
@@ -457,13 +585,14 @@ private fun TimerControls(
 private fun RoundPips(
     total        : Int,
     currentRound : Int,
+    accent       : Color,
     active       : Boolean
 ) {
-    val maxVisible = 20
+    val maxVisible   = 20
     val showOverflow = total > maxVisible
     val displayCount = if (showOverflow) maxVisible else total
-    val dotSize    = if (total <= 12) 10.dp else 7.dp
-    val dotSpacing = if (total <= 12) 6.dp  else 4.dp
+    val dotSize      = if (total <= 12) 10.dp else 7.dp
+    val dotSpacing   = if (total <= 12) 6.dp  else 4.dp
     Row(
         horizontalArrangement = Arrangement.spacedBy(dotSpacing),
         verticalAlignment     = Alignment.CenterVertically
@@ -477,9 +606,11 @@ private fun RoundPips(
                     .clip(CircleShape)
                     .background(
                         when {
-                            isCurrent -> Color.White
+                            // Current pip uses the phase accent colour with a
+                            // glow-like box effect — matches web .pip.current
+                            isCurrent -> accent
                             isDone    -> Color.White.copy(alpha = 0.55f)
-                            else      -> Color.White.copy(alpha = 0.18f)
+                            else      -> Color.White.copy(alpha = 0.15f)
                         }
                     )
             )
