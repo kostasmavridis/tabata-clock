@@ -142,27 +142,27 @@ fun TimerScreen(
 
             if (isLandscape) {
                 TimerContentLandscape(
-                    state        = state,
-                    settings     = settings,
-                    topColor     = topColor,
-                    arcProgress  = arcProgress,
-                    glowAlpha    = glowAlpha,
-                    onStartTapped   = ::onStartTapped,
-                    onPause      = { viewModel.pause() },
-                    onResume     = { viewModel.resume() },
-                    onReset      = { viewModel.reset() }
+                    state         = state,
+                    settings      = settings,
+                    topColor      = topColor,
+                    arcProgress   = arcProgress,
+                    glowAlpha     = glowAlpha,
+                    onStartTapped = ::onStartTapped,
+                    onPause       = { viewModel.pause() },
+                    onResume      = { viewModel.resume() },
+                    onReset       = { viewModel.reset() }
                 )
             } else {
                 TimerContentPortrait(
-                    state        = state,
-                    settings     = settings,
-                    topColor     = topColor,
-                    arcProgress  = arcProgress,
-                    glowAlpha    = glowAlpha,
-                    onStartTapped   = ::onStartTapped,
-                    onPause      = { viewModel.pause() },
-                    onResume     = { viewModel.resume() },
-                    onReset      = { viewModel.reset() }
+                    state         = state,
+                    settings      = settings,
+                    topColor      = topColor,
+                    arcProgress   = arcProgress,
+                    glowAlpha     = glowAlpha,
+                    onStartTapped = ::onStartTapped,
+                    onPause       = { viewModel.pause() },
+                    onResume      = { viewModel.resume() },
+                    onReset       = { viewModel.reset() }
                 )
             }
         }
@@ -170,12 +170,12 @@ fun TimerScreen(
 }
 
 // ---------------------------------------------------------------------------
-// Portrait layout (original)
+// Portrait layout
 // ---------------------------------------------------------------------------
 
 @Composable
 private fun TimerContentPortrait(
-    state        : com.kostasmavridis.tabataclock.viewmodel.TabataViewModel.TimerState,
+    state        : TabataViewModel.TimerState,
     settings     : com.kostasmavridis.tabataclock.model.TabataSettings,
     topColor     : Color,
     arcProgress  : Float,
@@ -185,49 +185,53 @@ private fun TimerContentPortrait(
     onResume     : () -> Unit,
     onReset      : () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .align(Alignment.Center)
-            .padding(bottom = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    // fillMaxSize Box provides the BoxScope needed to centre the Column.
+    Box(
+        modifier         = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        PhaseLabel(state.phase)
-        Spacer(Modifier.height(16.dp))
-        TimerArc(
-            arcSize     = 260.dp,
-            digitSize   = 88,
-            arcProgress = arcProgress,
-            glowAlpha   = glowAlpha,
-            secondsLeft = state.secondsLeft
-        )
-        Spacer(Modifier.height(20.dp))
-        RoundPips(
-            total        = settings.rounds,
-            currentRound = state.currentRound,
-            active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
-        )
-        Spacer(Modifier.height(10.dp))
-        RoundSetLabels(state = state, settings = settings)
-        Spacer(Modifier.height(44.dp))
-        TimerControls(
-            isRunning     = state.isRunning,
-            isPaused      = state.isPaused,
-            topColor      = topColor,
-            onStartTapped = onStartTapped,
-            onPause       = onPause,
-            onResume      = onResume,
-            onReset       = onReset
-        )
+        Column(
+            modifier            = Modifier.padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            PhaseLabel(state.phase)
+            Spacer(Modifier.height(16.dp))
+            TimerArc(
+                arcSize     = 260.dp,
+                digitSize   = 88,
+                arcProgress = arcProgress,
+                glowAlpha   = glowAlpha,
+                secondsLeft = state.secondsLeft
+            )
+            Spacer(Modifier.height(20.dp))
+            RoundPips(
+                total        = settings.rounds,
+                currentRound = state.currentRound,
+                active       = state.phase != TabataPhase.PREPARE && state.phase != TabataPhase.DONE
+            )
+            Spacer(Modifier.height(10.dp))
+            RoundSetLabels(state = state, settings = settings)
+            Spacer(Modifier.height(44.dp))
+            TimerControls(
+                isRunning     = state.isRunning,
+                isPaused      = state.isPaused,
+                topColor      = topColor,
+                onStartTapped = onStartTapped,
+                onPause       = onPause,
+                onResume      = onResume,
+                onReset       = onReset
+            )
+        }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Landscape layout (new)
+// Landscape layout
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun BoxScope.TimerContentLandscape(
-    state        : com.kostasmavridis.tabataclock.viewmodel.TabataViewModel.TimerState,
+private fun TimerContentLandscape(
+    state        : TabataViewModel.TimerState,
     settings     : com.kostasmavridis.tabataclock.model.TabataSettings,
     topColor     : Color,
     arcProgress  : Float,
@@ -238,7 +242,7 @@ private fun BoxScope.TimerContentLandscape(
     onReset      : () -> Unit
 ) {
     Row(
-        modifier = Modifier
+        modifier              = Modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -258,7 +262,7 @@ private fun BoxScope.TimerContentLandscape(
             )
         }
 
-        // Right: everything else
+        // Right: phase label, pips, labels, controls
         Column(
             modifier            = Modifier.weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -379,7 +383,7 @@ private fun TimerArc(
 
 @Composable
 private fun RoundSetLabels(
-    state    : com.kostasmavridis.tabataclock.viewmodel.TabataViewModel.TimerState,
+    state    : TabataViewModel.TimerState,
     settings : com.kostasmavridis.tabataclock.model.TabataSettings
 ) {
     Text(
