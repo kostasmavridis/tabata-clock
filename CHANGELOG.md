@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- **Silent audio after screen-off on Oppo/OnePlus devices.** The OS silently
+  invalidates native AudioTrack sessions during extended screen-off periods;
+  `SoundPool.play()` then returns 0 with no error while vibration continues to
+  work normally (it uses a system `Vibrator` service). Fix: `SoundPool` is now
+  unconditionally rebuilt on every `Activity.onResume()` via
+  `ISoundManager.reinitialise()` → `SoundManager.buildPool()`. The rebuild is
+  guarded in `TabataViewModel.onAppForegrounded()` so it is skipped while the
+  timer is actively running, avoiding any mid-workout audio gap.
+- **Pending-play dedup was ineffective.** The previous check compared
+  `lambda.javaClass` for two separate lambdas capturing different `Int` soundIds
+  — both resolve to the same anonymous class, so the guard never fired. Replaced
+  with a `Collections.synchronizedSet<Int>` tracking pending soundIds directly.
+
 ### Planned
 - Coordinated upgrade bundle: AGP 9 + Kotlin 2.3 + KSP2 + Gradle 9  
   _(deferred until Hilt confirms full KSP2 compatibility; Kotlin 2.3 drops KSP1 support)_

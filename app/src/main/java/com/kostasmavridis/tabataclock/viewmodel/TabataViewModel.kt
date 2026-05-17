@@ -32,7 +32,7 @@ class TabataViewModel @Inject constructor(
     private val serviceNotifier: ServiceNotifier = NoOpServiceNotifier()
 ) : AndroidViewModel(application) {
 
-    // ── Settings ──────────────────────────────────────────────────────────────
+    // ── Settings ─────────────────────────────────────────────────────────
     val settings: StateFlow<TabataSettings> = repo.settingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TabataSettings())
 
@@ -40,7 +40,7 @@ class TabataViewModel @Inject constructor(
         viewModelScope.launch { repo.saveSettings(s) }
     }
 
-    // ── Timer State ───────────────────────────────────────────────────────────
+    // ── Timer State ───────────────────────────────────────────────────
     data class TimerState(
         val phase: TabataPhase = TabataPhase.PREPARE,
         val secondsLeft: Int = 0,
@@ -71,7 +71,23 @@ class TabataViewModel @Inject constructor(
 
     private var timerJob: Job? = null
 
-    // ── Controls ──────────────────────────────────────────────────────────────
+    // ── Lifecycle callbacks ───────────────────────────────────────────
+
+    /**
+     * Called from [MainActivity.onResume] every time the app returns to the
+     * foreground. Rebuilds the SoundPool so that native AudioTrack sessions
+     * invalidated by OEM memory management are transparently restored.
+     *
+     * Skipped while the timer is actively running to avoid a brief audio gap
+     * if the user switches apps and immediately returns mid-workout.
+     */
+    fun onAppForegrounded() {
+        if (!_timerState.value.isRunning) {
+            soundManager.reinitialise()
+        }
+    }
+
+    // ── Controls ─────────────────────────────────────────────────────────
     fun start() {
         if (_timerState.value.isRunning) return
         _timerState.update { it.copy(isRunning = true, isPaused = false) }
@@ -106,7 +122,7 @@ class TabataViewModel @Inject constructor(
         )
     }
 
-    // ── Cycle Logic ───────────────────────────────────────────────────────────
+    // ── Cycle Logic ─────────────────────────────────────────────────────
     private suspend fun runTabataCycle() {
         val s = repo.settingsFlow.first()
         runPhase(TabataPhase.PREPARE, s.prepareSecs, s.prepareSecs)
