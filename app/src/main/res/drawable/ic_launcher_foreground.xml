@@ -1,7 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Launcher foreground: a white stopwatch / timer icon centred on the
-  adaptive icon canvas (108dp × 108dp, safe zone 72dp × 72dp).
+  Adaptive icon foreground: a bold progress arc (≈270° sweep, red→orange
+  gradient) with the digit '20' centred inside, mirroring the app's
+  TimerScreen visual language. All content sits within the 72dp safe zone
+  (coordinates 18–90 on the 108×108 canvas).
+
+  Arc geometry notes:
+  - Circle centre: (54, 54)
+  - Arc radius: 28dp  →  stroke midline at r=28
+  - Arc track (full ring): faint white 10% opacity, strokeWidth ≈ 7
+  - Progress arc: ≈270° sweep starting at 135° (bottom-left),
+    rendered as a thick stroked open path using SVG arcTo.
+  - Gradient approximated with two overlapping arcs: red base +
+    orange tip blended via semi-transparency.
+  - Pip dot at arc terminus (top-right, ~45°) for modern polish.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -9,33 +21,94 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Outer ring -->
+    <!-- ── Arc track (full 360° background ring) ────────────────────── -->
+    <!-- Simulated with a donut: outer circle minus inner circle fill    -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,20
-            a34,34 0 1 1 -0.001,0
-            Z
-            M54,26
-            a28,28 0 1 0 0.001,0
+        android:fillColor="#1AFFFFFF"
+        android:pathData="
+            M54,22 a32,32 0 1 1 -0.01,0 Z
+            M54,29 a25,25 0 1 0  0.01,0 Z" />
+
+    <!-- ── Progress arc body — red (#FF3D3D), 270° sweep ───────────── -->
+    <!-- Arc from 135° to 405° (=45°), clockwise, r=28.5, strokeWidth=7-->
+    <!-- Outer boundary path at r=32, inner at r=25, filled solid       -->
+    <!--
+        Start point at 135°: x=54+32*cos(135)=54-22.63=31.37, y=54+32*sin(135)=54+22.63=76.63
+        End   point at  45°: x=54+32*cos(45) =54+22.63=76.63, y=54+32*sin(45) =54-22.63=31.37
+        270° arc clockwise (large-arc=1, sweep=1)
+    -->
+    <path
+        android:fillColor="#FFFF3D3D"
+        android:pathData="
+            M31.37,76.63
+            A32,32 0 1 1 76.63,31.37
+            L73.28,34.72
+            A25,25 0 1 0 34.72,73.28
             Z" />
 
-    <!-- Crown / button at top -->
+    <!-- ── Progress arc tip — orange (#FF9500), last 90° only ────────  -->
+    <!-- Covers 315°→45°, same donut geometry, semi-opaque overlay      -->
+    <!--
+        315° outer: x=54+32*cos(315)=54+22.63=76.63, y=54+32*sin(315)=54-22.63=31.37
+         45° outer: x=76.63, y=31.37  (same point — tiny arc, use 90° span)
+        Start at 315°=(-45°): x=54+32*cos(-45)=76.63, y=54+32*sin(-45)=31.37
+        Hmm — simplify: paint a filled sector wedge for the tip.
+        Outer r=32 arc from 315° to 45° (90°, clockwise, small-arc=0)
+        315° outer: (76.63, 31.37) — same as 45° outer?
+        Use 270°→360° band instead:
+        270° = top:  (54, 22)  outer / (54, 29) inner
+         45° = (76.63,31.37)  outer / (71.68,36.32) inner
+    -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M50,20 h8 v-5 a4,4 0 0 0 -8,0 Z" />
+        android:fillColor="#CCFF9500"
+        android:pathData="
+            M54,22
+            A32,32 0 0 1 76.63,31.37
+            L73.28,34.72
+            A25,25 0 0 0 54,29
+            Z" />
 
-    <!-- Minute hand -->
+    <!-- ── Gap / cap at arc start (135°) — matches background ───────── -->
+    <!-- Small filled circle to create a round cap at the start point   -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M52.5,54 L52.5,34 a1.5,1.5 0 0 1 3,0 L55.5,54 Z" />
+        android:fillColor="#FF050D14"
+        android:pathData="M34.72,73.28 m-3.5,0 a3.5,3.5 0 1 0 7,0 a3.5,3.5 0 1 0 -7,0" />
 
-    <!-- Hour hand -->
+    <!-- ── Pip dot at arc tip (45°, top-right) ───────────────────────  -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,54 L66,62 a1.5,1.5 0 0 1 -1.5,2.6 L54,57 Z" />
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M76.63,31.37 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0" />
 
-    <!-- Centre dot -->
+    <!-- ── Inner circle — subtle dark overlay for depth ─────────────── -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,51 a3,3 0 1 1 -0.001,0 Z" />
+        android:fillColor="#33000000"
+        android:pathData="M54,54 m-22,0 a22,22 0 1 0 44,0 a22,22 0 1 0 -44,0 Z" />
+
+    <!-- ── Digit '2' ─────────────────────────────────────────────────  -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="
+            M43,45.5
+            a7,7 0 0 1 14,0
+            c0,3.5 -2,5.5 -5,8
+            L43,61.5 H57
+            V65 H39
+            V62
+            l11,-9
+            c2.5,-2 3.5,-3.5 3.5,-7
+            a3.5,3.5 0 0 0 -7,0
+            Z" />
+
+    <!-- ── Digit '0' ─────────────────────────────────────────────────  -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="
+            M65,45
+            a8,10 0 0 1 0,20
+            a8,10 0 0 1 0,-20
+            M65,49
+            a4,6 0 0 0 0,12
+            a4,6 0 0 0 0,-12
+            Z" />
+
 </vector>

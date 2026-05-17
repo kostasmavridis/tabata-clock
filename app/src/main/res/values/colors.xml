@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launcher icon background -->
-    <color name="ic_launcher_background">#1565C0</color>
+    <!-- Launcher icon background — used as fallback on pre-API-26 devices
+         and as the splash/task colour. Matches the app's deep navy palette. -->
+    <color name="ic_launcher_background">#0D1B2A</color>
 </resources>
