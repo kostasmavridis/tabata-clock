@@ -15,9 +15,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.kostasmavridis.tabataclock.ui.navigation.NavGraph
 import com.kostasmavridis.tabataclock.ui.theme.TabataClockTheme
+import com.kostasmavridis.tabataclock.viewmodel.TabataViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -33,6 +35,13 @@ class MainActivity : ComponentActivity() {
             // but the foreground service notification won't show if denied.
             showNotificationRationale = false
         }
+
+    // Held so onResume() can call reinitialise() without going through Compose.
+    // hiltViewModel() is only valid inside a composable; we get the VM directly
+    // from the ViewModelStore instead.
+    private val viewModel: TabataViewModel by lazy {
+        androidx.lifecycle.ViewModelProvider(this)[TabataViewModel::class.java]
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,6 +82,18 @@ class MainActivity : ComponentActivity() {
                 NavGraph(navController = navController)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Rebuild the SoundPool unconditionally on every foreground transition.
+        // Aggressive OEM memory managers (Oppo/OnePlus) silently invalidate
+        // native AudioTrack sessions during extended screen-off periods, causing
+        // SoundPool.play() to return 0 with no error. Vibration is unaffected
+        // because it uses a system service rather than app-owned native memory.
+        // Re-creating the pool is cheap (<100 ms for 4 small WAVs) and the
+        // pending-play queue handles any race between start() and onLoadComplete.
+        viewModel.onAppForegrounded()
     }
 
     private fun requestPostNotificationsIfNeeded() {

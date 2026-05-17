@@ -10,5 +10,12 @@ interface ISoundManager {
     fun playWork()
     fun playRest()
     fun playDone()
+    /**
+     * Tear down and rebuild the SoundPool, reloading all sounds from raw resources.
+     * Must be called each time the app returns to the foreground so that native
+     * AudioTrack sessions invalidated by aggressive OEM memory management
+     * (e.g. Oppo/OnePlus) are transparently restored.
+     */
+    fun reinitialise()
     fun release()
 }
