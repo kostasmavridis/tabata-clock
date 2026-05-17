@@ -62,8 +62,6 @@ fun TimerScreen(
     val isLandscape =
         LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // Reinitialise SoundPool every time this screen re-enters Resumed state.
-    // Covers both app-foreground and back-navigation from SettingsScreen.
     LifecycleResumeEffect(Unit) {
         viewModel.onScreenResumed()
         onPauseOrDispose { /* nothing to clean up */ }
@@ -490,6 +488,7 @@ private fun TimerArc(
     secondsLeft : Int,
     phase       : TabataPhase
 ) {
+    val isDone    = phase == TabataPhase.DONE
     val innerSize = arcSize - 60.dp
     Box(
         modifier = Modifier
@@ -501,24 +500,30 @@ private fun TimerArc(
                 val arcSz      = Size(size.width - stroke, size.height - stroke)
                 val topLeft    = Offset(inset, inset)
                 onDrawBehind {
+                    // Track ring — always shown
                     drawArc(
                         color = Color.White.copy(alpha = 0.07f),
                         startAngle = -90f, sweepAngle = 360f, useCenter = false,
                         topLeft = topLeft, size = arcSz,
                         style = Stroke(width = stroke, cap = StrokeCap.Round)
                     )
-                    drawArc(
-                        color = accent.copy(alpha = glowAlpha * 0.55f),
-                        startAngle = -90f, sweepAngle = 360f * arcProgress, useCenter = false,
-                        topLeft = topLeft, size = arcSz,
-                        style = Stroke(width = glowStroke, cap = StrokeCap.Round)
-                    )
-                    drawArc(
-                        color = accent,
-                        startAngle = -90f, sweepAngle = 360f * arcProgress, useCenter = false,
-                        topLeft = topLeft, size = arcSz,
-                        style = Stroke(width = stroke, cap = StrokeCap.Round)
-                    )
+                    // Progress arc — hidden on DONE so no partial ring shows behind overlay
+                    if (!isDone) {
+                        drawArc(
+                            color = accent.copy(alpha = glowAlpha * 0.55f),
+                            startAngle = -90f, sweepAngle = 360f * arcProgress,
+                            useCenter = false,
+                            topLeft = topLeft, size = arcSz,
+                            style = Stroke(width = glowStroke, cap = StrokeCap.Round)
+                        )
+                        drawArc(
+                            color = accent,
+                            startAngle = -90f, sweepAngle = 360f * arcProgress,
+                            useCenter = false,
+                            topLeft = topLeft, size = arcSz,
+                            style = Stroke(width = stroke, cap = StrokeCap.Round)
+                        )
+                    }
                 }
             },
         contentAlignment = Alignment.Center
@@ -537,16 +542,17 @@ private fun TimerArc(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    "%02d".format(secondsLeft),
-                    fontSize = digitSize.sp, fontWeight = FontWeight.ExtraBold,
-                    color = Color.White
-                )
-                if (phase != TabataPhase.DONE) {
+            // Digit and sub-label hidden on DONE — DoneOverlay renders over the arc
+            if (!isDone) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        "%02d".format(secondsLeft),
+                        fontSize = digitSize.sp, fontWeight = FontWeight.ExtraBold,
+                        color = Color.White
+                    )
                     Text(
                         phase.label.uppercase(),
                         fontSize = (digitSize * 0.17f).sp,
