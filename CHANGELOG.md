@@ -7,6 +7,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Security
+- **Gradle binary checksum verification** added to all three workflows
+  (`build.yml`, `release.yml`, `codeql.yml`). The SHA-256 of the
+  downloaded `gradle-*-bin.zip` is verified against the hash published at
+  https://gradle.org/release-checksums/ before `unzip` is executed,
+  preventing MITM or CDN tampering from silently executing a malicious
+  build tool.  
+  ⚠️ **Action required after merge:** update `EXPECTED_SHA256` in all
+  three bootstrap steps whenever `GRADLE_VERSION` is bumped. The correct
+  hash for each release is published at https://gradle.org/releases/ under
+  "checksums".
+- **Signing credentials removed from Gradle `-P` project properties**
+  (`release.yml`). `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`
+  were previously passed as `-Pandroid.injected.signing.*` flags, which
+  are visible to any co-tenant process that can read `/proc/*/cmdline` on
+  the runner and appear in Gradle `--info` logs. They are now passed
+  exclusively via `env:` and read by `build.gradle.kts` through
+  `System.getenv()`.
+- **Script injection guard for `github.ref`** (`release.yml`). All
+  `${{ github.* }}` and `${{ steps.*.outputs.* }}` expressions inside
+  `run:` blocks are now routed through `env:` variables so that a
+  tag name containing shell metacharacters cannot execute arbitrary code.
+  `GITHUB_OUTPUT` redirects are quoted (`>> "$GITHUB_OUTPUT"`).
+- **`KEYSTORE_BASE64` secret routed through `env:`** in all three
+  workflows. Previously the secret was interpolated inline into the shell
+  string (`echo "${{ secrets.KEYSTORE_BASE64 }}"`), increasing exposure
+  surface even though GitHub masks the value in logs.
+- **Keystore file cleaned up after every build step** (`build.yml`,
+  `release.yml`, `codeql.yml`). An `if: always()` step removes the
+  decoded keystore from disk so that subsequent steps (third-party
+  actions, build scan uploads) cannot read it.
+- **`echo KEY_ALIAS` removed from `build.yml`**. The debug signing step
+  previously printed `KEY_ALIAS=[value]` to the public CI log. The
+  bracket wrapping can defeat GitHub's secret masking. The `keytool
+  -list` call that validates the keystore is retained; only the `echo`
+  is removed.
+- **`SoundManager.reinitialise()` and `release()` made `@Synchronized`**.
+  `SoundPool.release()` is called from the main thread while
+  `onLoadCompleteListener` fires on a SoundPool internal thread. A
+  `release()` call mid-drain of `pendingPlays` could cause a use-after-free
+  on the native `SoundPool`. Both methods are now `@Synchronized`.
+- **`TabataForegroundService` exception handler narrowed** from
+  `catch (e: Exception)` (which silently swallows all unexpected runtime
+  exceptions) to two explicit catches: `SecurityException` (missing
+  `POST_NOTIFICATIONS` permission) and `IllegalStateException`
+  (`ForegroundServiceStartNotAllowedException` extends
+  `IllegalStateException` on Android 12+). Any other unexpected exception
+  now propagates normally.
+
 ### Fixed
 - **Silent audio after screen-off on Oppo/OnePlus devices.** The OS silently
   invalidates native AudioTrack sessions during extended screen-off periods;

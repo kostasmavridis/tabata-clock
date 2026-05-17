@@ -125,6 +125,17 @@ The four WAV files in `app/src/main/res/raw/` are **git-ignored**. They are gene
 ### Gradle wrapper JAR
 The `gradle/wrapper/gradle-wrapper.jar` is also **git-ignored** because the GitHub Contents API silently corrupts binary files. CI regenerates it via `gradle wrapper`. Locally, run `gradle wrapper --gradle-version 9.5.1 --distribution-type bin` once after cloning.
 
+### Gradle binary SHA-256 verification
+All three CI workflows (`build.yml`, `release.yml`, `codeql.yml`) verify the SHA-256 of
+the downloaded Gradle distribution before executing it. This prevents MITM or CDN
+tampering from silently running a malicious build tool.
+
+> ⚠️ **Action required when bumping `GRADLE_VERSION`:** update the `EXPECTED_SHA256`
+> variable in the bootstrap step of **all three workflows** at the same time. The correct
+> hash for each release is listed under **"checksums"** at
+> <https://gradle.org/releases/>. Updating the version without updating the hash will
+> cause every CI run to fail with `sha256sum: WARNING: 1 computed checksum did NOT match`.
+
 ### AGP 9 built-in Kotlin
 This project uses **AGP 9.1.1** with built-in Kotlin support (default since AGP 9.0). The `org.jetbrains.kotlin.android` plugin is **not applied** — AGP owns Kotlin compilation. The `org.jetbrains.kotlin.plugin.compose` plugin is still applied explicitly as AGP does not auto-wire the Compose compiler. Do not add `kotlin("android")` to any build file.
 
@@ -150,6 +161,9 @@ Use `fastSettings.prepareSecs * 1_000L` rather than `3_000L`. If the test settin
 - [ ] No new lint warnings introduced
 - [ ] `scripts/generate_sounds.py` was run if sound files are relevant
 - [ ] Commit messages are descriptive (`feat:`, `fix:`, `test:`, `docs:`, `ci:` prefixes)
+- [ ] If `GRADLE_VERSION` was bumped, `EXPECTED_SHA256` has been updated in **all three**
+  workflow files (`build.yml`, `release.yml`, `codeql.yml`) using the hash from
+  <https://gradle.org/releases/> (binary-only `-bin` ZIP checksum)
 
 ---
 

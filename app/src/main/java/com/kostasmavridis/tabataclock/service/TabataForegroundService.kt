@@ -67,10 +67,17 @@ class TabataForegroundService : Service() {
 
         try {
             startForeground(NOTIFICATION_ID, buildNotification(phase, seconds, round))
-        } catch (e: Exception) {
-            // Safety net: catches any residual SecurityException or
-            // ForegroundServiceStartNotAllowedException that slips through.
-            Log.e(TAG, "startForeground failed — stopping service: ${e.message}")
+        } catch (e: SecurityException) {
+            // POST_NOTIFICATIONS not granted (shouldn't reach here after UI guards,
+            // but handle defensively).
+            Log.e(TAG, "startForeground denied — missing permission: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        } catch (e: IllegalStateException) {
+            // ForegroundServiceStartNotAllowedException (Android 12+) extends
+            // IllegalStateException. Catches the case where the app is in the
+            // background when startForegroundService() is called.
+            Log.e(TAG, "startForeground not allowed — app in background: ${e.message}")
             stopSelf()
             return START_NOT_STICKY
         }

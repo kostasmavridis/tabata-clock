@@ -16,7 +16,9 @@ import javax.inject.Inject
 
 class SoundManager @Inject constructor(private val context: Context) : ISoundManager {
 
-    // lateinit so reinitialise() can replace the instance cleanly.
+    // Guarded by `this` — reinitialise() and release() are @Synchronized so that
+    // SoundPool.release() + buildPool() on the main thread cannot race with
+    // onLoadCompleteListener callbacks on the SoundPool internal thread.
     private lateinit var soundPool: SoundPool
 
     private var beepId: Int = 0
@@ -100,7 +102,10 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
      *
      * The operation is cheap (<100 ms for 4 small WAVs) and the existing
      * pending-play queue handles any race between start() and onLoadComplete.
+     *
+     * Synchronized so it cannot race with the SoundPool internal callback thread.
      */
+    @Synchronized
     override fun reinitialise() {
         // Release the existing pool (if it was already built) before creating a new one.
         try { soundPool.release() } catch (_: Exception) { }
@@ -137,6 +142,7 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
         vibrator.vibrate(effect)
     }
 
+    @Synchronized
     override fun release() {
         pendingPlays.clear()
         pendingSoundIds.clear()

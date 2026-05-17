@@ -59,6 +59,33 @@ from another will silently break if it runs in a different order or skips
 a step. Treat bootstrap steps as mandatory preamble, not as optimisation
 candidates.
 
+### Verify every downloaded binary before executing it
+Any file fetched from an external URL (CDN, Maven, GitHub Releases) should
+have its SHA-256 verified against a known-good hash before it is
+extracted or executed. This prevents MITM attacks and CDN compromises
+from silently running malicious build tooling.
+
+For the Gradle bootstrap step, the authoritative hash for each release
+is published at <https://gradle.org/releases/> under "checksums" — use
+the **binary-only (`-bin`) ZIP** row. When `GRADLE_VERSION` is bumped,
+`EXPECTED_SHA256` must be updated in **all three** workflows
+(`build.yml`, `release.yml`, `codeql.yml`) in the same commit. A version
+bump without a hash update will cause every CI run to abort with
+`sha256sum: WARNING: 1 computed checksum did NOT match`.
+
+### Never pass credentials as process arguments
+Process arguments (`-P`, `--property`, positional args) are visible to
+any co-tenant process that can read `/proc/*/cmdline` on the runner node
+and appear in verbose build logs. Pass all secrets exclusively through
+`env:` blocks and read them via `System.getenv()` in build scripts.
+
+### Route all `github.*` expressions through `env:` in `run:` blocks
+GitHub Actions interpolates `${{ github.* }}` expressions directly into
+shell scripts before the shell sees them. A tag name or branch name
+containing shell metacharacters (backticks, `$()`, semicolons) would
+execute arbitrary code. Assigning the expression to an `env:` variable
+first makes it a safe shell string regardless of its content.
+
 ### Upgrade GitHub Actions versions proactively
 GitHub Actions runners deprecate Node.js runtimes on a rolling basis.
 Actions that target a deprecated runtime emit warnings before they become
@@ -129,6 +156,12 @@ All dependency and plugin versions live in one place (the version
 catalog). No version strings anywhere else in the build — not in
 `build.gradle.kts` files, not in workflow YAML, not in comments that
 could drift. When a version changes, one file changes.
+
+**Exception — Gradle bootstrap SHA-256:** The `EXPECTED_SHA256` constant
+in the three CI bootstrap steps is inherently tied to a specific Gradle
+version and cannot live in the version catalog. It must be treated as
+part of the same changeset as `GRADLE_VERSION` in those steps: one change,
+one commit, all three files.
 
 ### Compose BOM in every configuration that uses Compose
 Declare the Compose BOM as a `platform()` dependency in every Gradle
@@ -202,3 +235,6 @@ builds on stable releases.
 | Binary file corrupted in repo | GitHub Contents API silently corrupts binary files | Never commit binary files via the API; bootstrap at CI runtime |
 | Workflow deprecation warning on every run | Action pinned to a version targeting a deprecated runtime | Bump action versions proactively when deprecation warnings appear |
 | Stale version in README / CONTRIBUTING | Docs updated separately from the version catalog | Always update docs in the same commit as the version bump |
+| `sha256sum: 1 computed checksum did NOT match` | `GRADLE_VERSION` bumped without updating `EXPECTED_SHA256` in all three workflows | Update hash in `build.yml`, `release.yml`, and `codeql.yml` together; source from https://gradle.org/releases/ |
+| Signing credentials visible in build logs or process list | Credentials passed as `-P` Gradle project properties | Pass all secrets exclusively via `env:` blocks; read with `System.getenv()` |
+| Shell injection via crafted tag/branch name | `${{ github.* }}` interpolated directly into `run:` script body | Route all GitHub context expressions through `env:` before using in shell |
