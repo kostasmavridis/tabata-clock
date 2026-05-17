@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tabata Clock</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --work-a:#FF4D6D; --work-b:#FF8C69;
+      --rest-a:#00D4FF; --rest-b:#7B61FF;
+      --prep-a:#4169E1; --prep-b:#00CFFD;
+      --done-a:#9B59B6; --done-b:#6C3483;
+      --bg-core:#06060F;
+      --glass-bg:rgba(255,255,255,0.04);
+      --glass-border:rgba(255,255,255,0.10);
+      --text-primary:#FFFFFF;
+      --text-muted:rgba(255,255,255,0.5);
+      --text-dim:rgba(255,255,255,0.28);
+      --easing-bounce:cubic-bezier(0.34,1.56,0.64,1);
+      --easing-smooth:cubic-bezier(0.4,0,0.2,1);
+      --radius-card:24px; --radius-pill:100px;
+    }
+    html,body { height:100%; font-family:'Space Grotesk','Inter',sans-serif; background:var(--bg-core); color:var(--text-primary); overflow-x:hidden; -webkit-font-smoothing:antialiased; }
+
+    /* ── Background mesh ── */
+    #bg-mesh { position:fixed; inset:0; z-index:0; transition:background 0.9s var(--easing-smooth); }
+    #bg-mesh::before,#bg-mesh::after { content:''; position:absolute; border-radius:50%; filter:blur(120px); opacity:0.35; transition:all 0.9s var(--easing-smooth); }
+    #bg-mesh::before { width:600px; height:600px; top:-200px; left:-150px; }
+    #bg-mesh::after  { width:500px; height:500px; bottom:-180px; right:-100px; }
+    body.phase-prepare #bg-mesh { background:radial-gradient(ellipse at 20% 20%,rgba(65,105,225,0.25) 0%,transparent 60%),radial-gradient(ellipse at 80% 80%,rgba(0,207,253,0.18) 0%,transparent 60%),var(--bg-core); }
+    body.phase-prepare #bg-mesh::before { background:var(--prep-a); } body.phase-prepare #bg-mesh::after { background:var(--prep-b); }
+    body.phase-work #bg-mesh { background:radial-gradient(ellipse at 20% 20%,rgba(255,77,109,0.28) 0%,transparent 60%),radial-gradient(ellipse at 80% 80%,rgba(255,140,105,0.20) 0%,transparent 60%),var(--bg-core); }
+    body.phase-work #bg-mesh::before { background:var(--work-a); } body.phase-work #bg-mesh::after { background:var(--work-b); }
+    body.phase-rest #bg-mesh { background:radial-gradient(ellipse at 20% 20%,rgba(0,212,255,0.25) 0%,transparent 60%),radial-gradient(ellipse at 80% 80%,rgba(123,97,255,0.20) 0%,transparent 60%),var(--bg-core); }
+    body.phase-rest #bg-mesh::before { background:var(--rest-a); } body.phase-rest #bg-mesh::after { background:var(--rest-b); }
+    body.phase-done #bg-mesh { background:radial-gradient(ellipse at 50% 40%,rgba(155,89,182,0.30) 0%,transparent 60%),var(--bg-core); }
+    body.phase-done #bg-mesh::before { background:var(--done-a); } body.phase-done #bg-mesh::after { background:var(--done-b); }
+
+    /* ── Header ── */
+    header { position:fixed; top:0; left:0; right:0; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:16px 28px; background:rgba(6,6,15,0.55); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border-bottom:1px solid var(--glass-border); }
+    .logo { font-size:1.1rem; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; background:linear-gradient(90deg,#fff 0%,rgba(255,255,255,0.55) 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .logo span { background:linear-gradient(90deg,var(--work-a),var(--work-b)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .header-badge { font-size:0.72rem; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); border:1px solid var(--glass-border); padding:4px 12px; border-radius:var(--radius-pill); }
+
+    /* ── App shell ── */
+    #app { position:relative; z-index:1; min-height:100dvh; display:flex; flex-direction:column; align-items:center; padding:88px 16px 40px; }
+
+    /* ── Main layout: single column always, side-by-side on wide screens ── */
+    main {
+      width:100%; max-width:560px;
+      display:flex; flex-direction:column;
+      align-items:center; gap:28px;
+    }
+
+    /* ── Phase label ── */
+    #phase-label { font-size:clamp(0.85rem,2vw,1rem); font-weight:600; letter-spacing:0.32em; text-transform:uppercase; color:var(--text-muted); transition:color 0.6s var(--easing-smooth); }
+    #phase-label.phase-work { color:var(--work-a); } #phase-label.phase-rest { color:var(--rest-a); } #phase-label.phase-prepare { color:var(--prep-b); } #phase-label.phase-done { color:var(--done-a); }
+
+    /* ── Timer ring ── */
+    .ring-wrapper { position:relative; display:flex; align-items:center; justify-content:center; }
+    /* The SVG ring circles are drawn rotated -90deg so progress starts at top.
+       The text group inside is NOT rotated in CSS — only via SVG transform attribute. */
+    #timer-ring { transform:rotate(-90deg); overflow:visible; }
+    .ring-track { fill:none; stroke:rgba(255,255,255,0.07); stroke-width:6; }
+    .ring-progress { fill:none; stroke-width:7; stroke-linecap:round; transition:stroke-dashoffset 0.95s cubic-bezier(0.25,0.46,0.45,0.94),stroke 0.6s var(--easing-smooth),filter 0.6s var(--easing-smooth); }
+    .ring-glow { fill:none; stroke-width:18; stroke-linecap:round; opacity:0; transition:opacity 0.6s,stroke 0.6s; }
+    body.phase-work .ring-glow { stroke:rgba(255,77,109,0.22); opacity:1; }
+    body.phase-rest .ring-glow { stroke:rgba(0,212,255,0.22); opacity:1; }
+    body.phase-prepare .ring-glow { stroke:rgba(65,105,225,0.22); opacity:1; }
+
+    /* Text group: counter-rotates in SVG attribute, no CSS transform needed */
+    #timer-seconds { font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:88px; fill:#fff; text-anchor:middle; dominant-baseline:middle; letter-spacing:-2px; }
+    #timer-sub { font-family:'Inter',sans-serif; font-weight:500; font-size:13px; fill:rgba(255,255,255,0.4); text-anchor:middle; dominant-baseline:middle; letter-spacing:3px; }
+
+    @keyframes pulse-dot { 0%,100%{opacity:0.6} 50%{opacity:1} }
+    .live-dot { fill:var(--work-a); animation:pulse-dot 1.2s ease-in-out infinite; }
+    .live-dot.rest { fill:var(--rest-a); } .live-dot.hidden { opacity:0; animation:none; }
+
+    /* ── Round pips ── */
+    #round-pips { display:flex; gap:7px; align-items:center; justify-content:center; flex-wrap:wrap; max-width:320px; }
+    .pip { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.15); transition:background 0.4s var(--easing-smooth),transform 0.35s var(--easing-bounce),box-shadow 0.4s; }
+    .pip.done { background:rgba(255,255,255,0.55); }
+    .pip.current { background:#fff; transform:scale(1.45); box-shadow:0 0 10px 2px rgba(255,255,255,0.55); }
+    .pip.current.work { background:var(--work-a); box-shadow:0 0 12px 3px rgba(255,77,109,0.65); }
+    .pip.current.rest { background:var(--rest-a); box-shadow:0 0 12px 3px rgba(0,212,255,0.65); }
+
+    /* ── Meta chips ── */
+    .meta-row { display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap; }
+    .chip { background:var(--glass-bg); border:1px solid var(--glass-border); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border-radius:var(--radius-pill); padding:6px 16px; font-size:0.78rem; font-weight:600; letter-spacing:0.06em; color:var(--text-muted); }
+    .chip strong { color:var(--text-primary); }
+
+    /* ── Controls ── */
+    .controls { display:flex; align-items:center; gap:18px; }
+    .btn-icon { width:52px; height:52px; border-radius:50%; border:1px solid var(--glass-border); background:var(--glass-bg); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); color:rgba(255,255,255,0.75); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.25s,transform 0.2s var(--easing-bounce); font-size:20px; }
+    .btn-icon:hover { background:rgba(255,255,255,0.10); transform:scale(1.08); }
+    .btn-icon:active { transform:scale(0.94); }
+    .btn-primary { width:82px; height:82px; border-radius:50%; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; position:relative; transition:transform 0.25s var(--easing-bounce); outline:none; }
+    .btn-primary::before { content:''; position:absolute; inset:-3px; border-radius:50%; background:linear-gradient(135deg,var(--work-a),var(--work-b)); z-index:-1; opacity:0.5; filter:blur(10px); transition:background 0.6s; }
+    .btn-primary.rest::before { background:linear-gradient(135deg,var(--rest-a),var(--rest-b)); }
+    .btn-primary-inner { width:100%; height:100%; border-radius:50%; background:linear-gradient(135deg,var(--work-a) 0%,var(--work-b) 100%); display:flex; align-items:center; justify-content:center; transition:background 0.6s var(--easing-smooth); box-shadow:0 8px 32px rgba(255,77,109,0.45); }
+    .btn-primary.rest .btn-primary-inner { background:linear-gradient(135deg,var(--rest-a) 0%,var(--rest-b) 100%); box-shadow:0 8px 32px rgba(0,212,255,0.45); }
+    .btn-primary.prepare .btn-primary-inner { background:linear-gradient(135deg,var(--prep-a) 0%,var(--prep-b) 100%); box-shadow:0 8px 32px rgba(65,105,225,0.45); }
+    .btn-primary:hover { transform:scale(1.08); } .btn-primary:active { transform:scale(0.95); }
+
+    /* ── Settings toggle + panel ── */
+    .btn-settings-toggle { display:flex; align-items:center; gap:6px; padding:8px 18px; border-radius:var(--radius-pill); border:1px solid var(--glass-border); background:var(--glass-bg); backdrop-filter:blur(10px); color:var(--text-muted); font-family:inherit; font-size:0.78rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; transition:background 0.25s,color 0.25s,transform 0.2s; }
+    .btn-settings-toggle:hover { background:rgba(255,255,255,0.09); color:#fff; transform:scale(1.04); }
+    .settings-panel { width:100%; background:var(--glass-bg); border:1px solid var(--glass-border); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border-radius:var(--radius-card); padding:24px; display:grid; grid-template-columns:1fr 1fr; gap:20px 24px; }
+    .settings-panel.hidden { display:none; }
+    .setting-group { display:flex; flex-direction:column; gap:10px; }
+    .setting-label { display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-muted); }
+    .setting-label .val { font-size:0.95rem; font-weight:700; color:var(--text-primary); min-width:36px; text-align:right; }
+    input[type=range] { width:100%; -webkit-appearance:none; appearance:none; height:4px; border-radius:4px; background:rgba(255,255,255,0.12); outline:none; cursor:pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 0 8px rgba(255,255,255,0.5); cursor:pointer; }
+    .settings-full-row { grid-column:1/-1; display:flex; justify-content:center; }
+    .btn-save { padding:10px 36px; border-radius:var(--radius-pill); border:1px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.08); color:#fff; font-family:inherit; font-size:0.85rem; font-weight:600; cursor:pointer; transition:background 0.25s,transform 0.2s; }
+    .btn-save:hover { background:rgba(255,255,255,0.15); transform:scale(1.04); }
+
+    /* ── Done overlay ── */
+    #done-overlay { position:fixed; inset:0; z-index:200; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(6,6,15,0.80); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); opacity:0; pointer-events:none; transition:opacity 0.5s; }
+    #done-overlay.visible { opacity:1; pointer-events:all; }
+    .done-emoji { font-size:72px; margin-bottom:16px; }
+    .done-title { font-size:clamp(2rem,6vw,3.5rem); font-weight:900; letter-spacing:-0.03em; background:linear-gradient(90deg,var(--done-a),var(--done-b)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px; }
+    .done-sub { color:var(--text-muted); font-size:1rem; margin-bottom:32px; }
+    .btn-done { padding:14px 40px; border-radius:var(--radius-pill); border:none; background:linear-gradient(135deg,var(--done-a),var(--done-b)); color:#fff; font-family:inherit; font-size:1rem; font-weight:700; cursor:pointer; box-shadow:0 8px 32px rgba(155,89,182,0.45); }
+
+    /* ── Phase flash ── */
+    @keyframes phase-flash { 0%{opacity:0.55} 100%{opacity:0} }
+    #phase-flash { position:fixed; inset:0; z-index:100; pointer-events:none; opacity:0; }
+    #phase-flash.flash-work { animation:phase-flash 0.45s ease-out forwards; background:radial-gradient(ellipse at center,rgba(255,77,109,0.28) 0%,transparent 70%); }
+    #phase-flash.flash-rest { animation:phase-flash 0.45s ease-out forwards; background:radial-gradient(ellipse at center,rgba(0,212,255,0.25) 0%,transparent 70%); }
+
+    /* ── Responsive ── */
+    @media(max-width:400px) {
+      #timer-ring { width:240px; height:240px; }
+      #timer-seconds { font-size:72px; }
+    }
+    @media(min-width:800px) {
+      main { flex-direction:row; flex-wrap:wrap; max-width:860px; align-items:flex-start; justify-content:center; gap:40px; }
+      .left-col  { display:flex; flex-direction:column; align-items:center; gap:28px; flex:0 0 auto; }
+      .right-col { display:flex; flex-direction:column; align-items:center; gap:20px; flex:1 1 300px; padding-top:8px; }
+    }
+  </style>
+</head>
+<body class="phase-prepare">
+  <div id="bg-mesh"></div>
+  <div id="phase-flash"></div>
+
+  <div id="done-overlay">
+    <div class="done-emoji">🔥</div>
+    <div class="done-title">Session Complete</div>
+    <div class="done-sub" id="done-sub-text">Well done — workout finished!</div>
+    <button class="btn-done" onclick="resetAll()">Start Again</button>
+  </div>
+
+  <header>
+    <div class="logo">Tabata<span>Clock</span></div>
+    <div class="header-badge">Web Dashboard</div>
+  </header>
+
+  <div id="app">
+    <main id="main-layout">
+
+      <!-- Left column: ring + controls -->
+      <div class="left-col">
+        <div id="phase-label">Ready</div>
+
+        <div class="ring-wrapper">
+          <svg id="timer-ring" width="280" height="280" viewBox="0 0 280 280">
+            <defs>
+              <filter id="glow-work" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="6" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <filter id="glow-rest" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="6" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <circle class="ring-track"    cx="140" cy="140" r="120"/>
+            <circle class="ring-glow"     cx="140" cy="140" r="120" id="ring-glow-el"/>
+            <circle class="ring-progress" cx="140" cy="140" r="120" id="ring-progress-el"
+                    stroke="#FF4D6D" stroke-dasharray="753.98" stroke-dashoffset="0"
+                    filter="url(#glow-work)"/>
+            <!-- Counter-rotate the text group so it stays upright while the SVG ring is rotated -90deg -->
+            <g transform="rotate(90,140,140)">
+              <text id="timer-seconds" x="140" y="132">20</text>
+              <text id="timer-sub"     x="140" y="168">SECONDS</text>
+              <circle class="live-dot hidden" id="live-dot" cx="140" cy="194" r="4"/>
+            </g>
+          </svg>
+        </div>
+
+        <div id="round-pips"></div>
+
+        <div class="meta-row">
+          <div class="chip">Round <strong id="chip-round">—</strong></div>
+          <div class="chip">Set <strong id="chip-set">—</strong></div>
+          <div class="chip">Total <strong id="chip-total">—</strong></div>
+        </div>
+
+        <div class="controls">
+          <button class="btn-icon" onclick="resetAll()">&#8635;</button>
+          <button class="btn-primary prepare" id="btn-play" onclick="handlePlayPause()">
+            <div class="btn-primary-inner">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="white" id="icon-play"><path d="M8 5v14l11-7z"/></svg>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="white" id="icon-pause" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </div>
+          </button>
+          <button class="btn-icon" onclick="skipPhase()">&#9178;</button>
+        </div>
+      </div>
+
+      <!-- Right column: settings (below controls on mobile, beside on desktop) -->
+      <div class="right-col">
+        <button class="btn-settings-toggle" onclick="toggleSettings()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          Settings
+        </button>
+        <div class="settings-panel hidden" id="settings-panel">
+          <div class="setting-group"><div class="setting-label">Prepare <span class="val" id="val-prepare">10s</span></div><input type="range" id="sl-prepare" min="5" max="60" step="5" value="10"></div>
+          <div class="setting-group"><div class="setting-label">Work <span class="val" id="val-work">20s</span></div><input type="range" id="sl-work" min="10" max="120" step="5" value="20"></div>
+          <div class="setting-group"><div class="setting-label">Rest <span class="val" id="val-rest">10s</span></div><input type="range" id="sl-rest" min="5" max="60" step="5" value="10"></div>
+          <div class="setting-group"><div class="setting-label">Rounds <span class="val" id="val-rounds">8</span></div><input type="range" id="sl-rounds" min="1" max="20" step="1" value="8"></div>
+          <div class="setting-group"><div class="setting-label">Sets <span class="val" id="val-sets">1</span></div><input type="range" id="sl-sets" min="1" max="5" step="1" value="1"></div>
+          <div class="setting-group"><div class="setting-label">Set Rest <span class="val" id="val-setrest">60s</span></div><input type="range" id="sl-setrest" min="10" max="120" step="10" value="60"></div>
+          <div class="settings-full-row"><button class="btn-save" onclick="applySettings()">Apply & Reset</button></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    const PHASES={PREPARE:'prepare',WORK:'work',REST:'rest',SET_REST:'set_rest',DONE:'done'};
+    let cfg={prepareSecs:10,workSecs:20,restSecs:10,rounds:8,sets:1,setRestSecs:60};
+    let state=buildState(),intervalId=null;
+    function buildState(){return{phase:PHASES.PREPARE,secondsLeft:cfg.prepareSecs,currentRound:1,currentSet:1,isRunning:false,isPaused:false,totalRoundsCompleted:0};}
+    function handlePlayPause(){if(state.phase===PHASES.DONE){resetAll();return;}state.isRunning?pause():resume();}
+    function resume(){state.isRunning=true;state.isPaused=false;intervalId=setInterval(tick,1000);render();}
+    function pause(){state.isRunning=false;state.isPaused=true;clearInterval(intervalId);render();}
+    function tick(){if(state.secondsLeft>0){state.secondsLeft--;render();}else{advance();}}
+    function advance(){
+      if(state.phase===PHASES.PREPARE){state.phase=PHASES.WORK;state.secondsLeft=cfg.workSecs;}
+      else if(state.phase===PHASES.WORK){
+        state.totalRoundsCompleted++;
+        if(state.currentRound<cfg.rounds){state.phase=PHASES.REST;state.secondsLeft=cfg.restSecs;}
+        else if(state.currentSet<cfg.sets){state.currentSet++;state.currentRound=1;state.phase=PHASES.SET_REST;state.secondsLeft=cfg.setRestSecs;}
+        else{state.phase=PHASES.DONE;state.isRunning=false;clearInterval(intervalId);showDone();render();return;}
+      }else if(state.phase===PHASES.REST){state.currentRound++;state.phase=PHASES.WORK;state.secondsLeft=cfg.workSecs;}
+      else if(state.phase===PHASES.SET_REST){state.phase=PHASES.WORK;state.secondsLeft=cfg.workSecs;}
+      flash(state.phase);render();
+    }
+    function skipPhase(){if(!state.isRunning&&!state.isPaused)return;clearInterval(intervalId);state.secondsLeft=0;advance();if(state.isRunning)intervalId=setInterval(tick,1000);}
+    function resetAll(){clearInterval(intervalId);state=buildState();hideDone();render();}
+    function toggleSettings(){document.getElementById('settings-panel').classList.toggle('hidden');}
+    function applySettings(){
+      cfg.prepareSecs=+document.getElementById('sl-prepare').value;
+      cfg.workSecs=+document.getElementById('sl-work').value;
+      cfg.restSecs=+document.getElementById('sl-rest').value;
+      cfg.rounds=+document.getElementById('sl-rounds').value;
+      cfg.sets=+document.getElementById('sl-sets').value;
+      cfg.setRestSecs=+document.getElementById('sl-setrest').value;
+      resetAll();document.getElementById('settings-panel').classList.add('hidden');
+    }
+    ['prepare','work','rest','setrest'].forEach(k=>{const s=document.getElementById('sl-'+k),v=document.getElementById('val-'+k);s.addEventListener('input',()=>v.textContent=s.value+'s');});
+    ['rounds','sets'].forEach(k=>{const s=document.getElementById('sl-'+k),v=document.getElementById('val-'+k);s.addEventListener('input',()=>v.textContent=s.value);});
+    const C=2*Math.PI*120;
+    function totalSecs(){switch(state.phase){case PHASES.PREPARE:return cfg.prepareSecs;case PHASES.WORK:return cfg.workSecs;case PHASES.REST:return cfg.restSecs;case PHASES.SET_REST:return cfg.setRestSecs;default:return 1;}}
+    function stroke(){switch(state.phase){case PHASES.WORK:return['#FF4D6D','glow-work'];case PHASES.REST:return['#00D4FF','glow-rest'];case PHASES.PREPARE:return['#4169E1','glow-work'];case PHASES.SET_REST:return['#00D4FF','glow-rest'];default:return['#9B59B6','glow-work'];}}
+    function render(){
+      const[c,f]=stroke(),prog=document.getElementById('ring-progress-el');
+      prog.setAttribute('stroke',c);prog.style.strokeDashoffset=C*(1-state.secondsLeft/totalSecs());prog.setAttribute('filter','url(#'+f+')');
+      document.getElementById('timer-seconds').textContent=String(state.secondsLeft).padStart(2,'0');
+      document.getElementById('timer-sub').textContent={prepare:'PREPARE',work:'WORK',rest:'REST',set_rest:'SET REST',done:'DONE'}[state.phase]||'';
+      const pl=document.getElementById('phase-label');
+      pl.textContent=state.phase===PHASES.PREPARE?'Get Ready':state.phase===PHASES.WORK?'Work':state.phase===PHASES.REST?'Rest':state.phase===PHASES.SET_REST?'Set Rest':'Done!';
+      pl.className='phase-'+state.phase;
+      document.body.className='phase-'+(state.phase===PHASES.SET_REST?'rest':state.phase);
+      const dot=document.getElementById('live-dot');
+      if(state.isRunning){dot.classList.remove('hidden');dot.className='live-dot '+(state.phase===PHASES.REST||state.phase===PHASES.SET_REST?'rest':'');}
+      else dot.classList.add('hidden');
+      document.getElementById('icon-play').style.display=state.isRunning?'none':'block';
+      document.getElementById('icon-pause').style.display=state.isRunning?'block':'none';
+      const pb=document.getElementById('btn-play');
+      pb.className='btn-primary '+(state.phase===PHASES.REST||state.phase===PHASES.SET_REST?'rest':state.phase===PHASES.PREPARE?'prepare':'');
+      renderPips();
+      document.getElementById('chip-round').textContent=state.phase===PHASES.DONE?cfg.rounds:state.currentRound+' / '+cfg.rounds;
+      document.getElementById('chip-set').textContent=state.currentSet+' / '+cfg.sets;
+      document.getElementById('chip-total').textContent=state.totalRoundsCompleted+' / '+(cfg.rounds*cfg.sets);
+    }
+    function renderPips(){
+      const c=document.getElementById('round-pips');c.innerHTML='';
+      const active=state.phase!==PHASES.PREPARE&&state.phase!==PHASES.DONE;
+      for(let i=1;i<=Math.min(cfg.rounds,20);i++){const p=document.createElement('div');p.className='pip';if(active){if(i<state.currentRound)p.classList.add('done');else if(i===state.currentRound){p.classList.add('current');p.classList.add(state.phase===PHASES.REST?'rest':'work');}}c.appendChild(p);}
+    }
+    function flash(phase){const el=document.getElementById('phase-flash');el.className='';void el.offsetWidth;el.className=phase===PHASES.REST?'flash-rest':'flash-work';}
+    function showDone(){const m=Math.floor(cfg.workSecs*cfg.rounds*cfg.sets/60),s=(cfg.workSecs*cfg.rounds*cfg.sets)%60;document.getElementById('done-sub-text').textContent=`${cfg.rounds*cfg.sets} rounds · ${m}m ${s}s work`;document.getElementById('done-overlay').classList.add('visible');}
+    function hideDone(){document.getElementById('done-overlay').classList.remove('visible');}
+    document.addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();handlePlayPause();}if(e.code==='KeyR')resetAll();if(e.code==='KeyS')skipPhase();});
+    render();
+  </script>
+</body>
+</html>

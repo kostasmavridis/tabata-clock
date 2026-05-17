@@ -16,9 +16,6 @@ import javax.inject.Inject
 
 class SoundManager @Inject constructor(private val context: Context) : ISoundManager {
 
-    // Guarded by `this` — reinitialise() and release() are @Synchronized so that
-    // SoundPool.release() + buildPool() on the main thread cannot race with
-    // onLoadCompleteListener callbacks on the SoundPool internal thread.
     private lateinit var soundPool: SoundPool
 
     private var beepId: Int = 0
@@ -26,15 +23,11 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
     private var restId: Int = 0
     private var doneId: Int = 0
 
-    // Count how many of the 4 sounds have finished loading.
     private val loadedCount = AtomicInteger(0)
     private val totalSounds = 4
     @Volatile private var loaded = false
 
-    // Pending play requests fired before all sounds were ready.
-    // Stored as soundId ints; drained once all 4 are loaded.
     private val pendingPlays = ConcurrentLinkedQueue<() -> Unit>()
-    // Set of soundIds already in pendingPlays to prevent duplicates.
     private val pendingSoundIds: MutableSet<Int> = Collections.synchronizedSet(mutableSetOf())
 
     private val vibrator: Vibrator by lazy {
@@ -47,9 +40,7 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
         }
     }
 
-    init {
-        buildPool()
-    }
+    init { buildPool() }
 
     // ---------------------------------------------------------------------------
     // Pool lifecycle
@@ -65,8 +56,6 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
             .setMaxStreams(4)
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    // USAGE_MEDIA: routes to the Media volume slider and is
-                    // correctly directed to sport Bluetooth headphones.
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
@@ -76,10 +65,7 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
         soundPool.setOnLoadCompleteListener { _, _, status ->
             if (status == 0 && loadedCount.incrementAndGet() == totalSounds) {
                 loaded = true
-                // Drain any play() calls that arrived before we were ready.
-                while (pendingPlays.isNotEmpty()) {
-                    pendingPlays.poll()?.invoke()
-                }
+                while (pendingPlays.isNotEmpty()) pendingPlays.poll()?.invoke()
                 pendingSoundIds.clear()
             }
         }
@@ -95,22 +81,28 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
     }
 
     /**
-     * Unconditionally tears down the current SoundPool and builds a fresh one,
-     * reloading all four WAV files. Call this every time the app returns to the
-     * foreground so that native AudioTrack sessions invalidated by OEM memory
-     * management are transparently restored.
-     *
-     * The operation is cheap (<100 ms for 4 small WAVs) and the existing
-     * pending-play queue handles any race between start() and onLoadComplete.
-     *
-     * Synchronized so it cannot race with the SoundPool internal callback thread.
+     * Full reinitialise — call when NOT running (e.g. app foregrounded while
+     * idle). Tears down and rebuilds the SoundPool from scratch.
      */
     @Synchronized
     override fun reinitialise() {
-        // Release the existing pool (if it was already built) before creating a new one.
         try { soundPool.release() } catch (_: Exception) { }
         buildPool()
         Log.d("SoundManager", "reinitialise: SoundPool rebuilt")
+    }
+
+    /**
+     * Safe mid-run reinitialise — call whenever returning to TimerScreen
+     * (including back-from-Settings). Pending play requests survive because
+     * [buildPool] re-enqueues them via the pending queue mechanism.
+     *
+     * Synchronized for the same reason as [reinitialise].
+     */
+    @Synchronized
+    override fun reinitialiseIfNeeded() {
+        try { soundPool.release() } catch (_: Exception) { }
+        buildPool()
+        Log.d("SoundManager", "reinitialiseIfNeeded: SoundPool rebuilt")
     }
 
     // ---------------------------------------------------------------------------
@@ -127,9 +119,6 @@ class SoundManager @Inject constructor(private val context: Context) : ISoundMan
         if (loaded) {
             soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
         } else {
-            // Queue the request — will be replayed once onLoadCompleteListener
-            // fires for the last sound. Guard against duplicate entries for the
-            // same soundId (e.g. rapid phase ticks before load completes).
             if (pendingSoundIds.add(soundId)) {
                 pendingPlays.offer { soundPool.play(soundId, 1f, 1f, 1, 0, 1f) }
             }
