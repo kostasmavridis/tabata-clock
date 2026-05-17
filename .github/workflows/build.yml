@@ -108,3 +108,12 @@ jobs:
         with:
           name: tabata-clock-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      # ── Gradle problems report ──────────────────────────────
+      - name: Upload Gradle problems report
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: gradle-problems-report
+          path: build/reports/problems/problems-report.html
+          if-no-files-found: ignore
