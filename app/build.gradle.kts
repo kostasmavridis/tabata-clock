@@ -61,7 +61,8 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
-        compose = true
+        compose      = true
+        buildConfig  = true   // required for BuildConfig.DEBUG in SettingsScreen
     }
 
     packaging {

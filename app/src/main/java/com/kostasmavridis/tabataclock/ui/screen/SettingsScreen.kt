@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kostasmavridis.tabataclock.BuildConfig
+import com.kostasmavridis.tabataclock.debug.debugActions
 import com.kostasmavridis.tabataclock.ui.theme.PhaseColors
 import com.kostasmavridis.tabataclock.viewmodel.TabataViewModel
 
@@ -136,9 +137,10 @@ fun SettingsScreen(
                 }
 
                 // ── Debug section ─────────────────────────────────────────
-                // Visible only in debug builds (BuildConfig.DEBUG is a
-                // compile-time constant; the release compiler removes this
-                // entire block via dead-code elimination).
+                // BuildConfig.DEBUG is a compile-time constant — the release
+                // R8 compiler removes this entire block via dead-code elimination.
+                // debugActions resolves to NoOpDebugActions in release and
+                // RealDebugActions in debug; neither crosses source-set boundaries.
                 if (BuildConfig.DEBUG) {
                     SettingsSectionHeader("Debug")
                     SettingsCard {
@@ -173,10 +175,8 @@ fun SettingsScreen(
                                 }
                             }
                             FilledTonalButton(
-                                onClick = {
-                                    com.kostasmavridis.tabataclock.debug.LogExporter.share(context)
-                                },
-                                colors = ButtonDefaults.filledTonalButtonColors(
+                                onClick = { debugActions.exportLogs(context) },
+                                colors  = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = Color(0xFFFF5252).copy(alpha = 0.18f),
                                     contentColor   = Color(0xFFFF5252)
                                 )
